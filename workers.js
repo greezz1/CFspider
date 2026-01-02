@@ -1,5 +1,4 @@
 // CFspider - Cloudflare Workers 代理 IP 池
-// 赛博朋克2077风格界面
 
 let 反代IP = '';
 
@@ -8,7 +7,6 @@ export default {
         const url = new URL(request.url);
         const path = url.pathname.slice(1).toLowerCase();
         
-        // 初始化 PROXYIP
         if (env.PROXYIP) {
             const proxyIPs = env.PROXYIP.split(',').map(ip => ip.trim());
             反代IP = proxyIPs[Math.floor(Math.random() * proxyIPs.length)];
@@ -26,19 +24,16 @@ export default {
             'Access-Control-Allow-Headers': '*'
         };
         
-        // CORS 预检请求
         if (request.method === 'OPTIONS') {
             return new Response(null, { headers: corsHeaders });
         }
         
-        // 首页 - 赛博朋克2077风格
         if (path === '' || path === '/') {
-            return new Response(generateCyberpunkPage(request), {
+            return new Response(generateCyberpunkPage(request, url), {
                 headers: { 'Content-Type': 'text/html; charset=utf-8' }
             });
         }
         
-        // 调试信息
         if (path === 'debug') {
             return new Response(JSON.stringify({
                 success: true,
@@ -52,7 +47,6 @@ export default {
             });
         }
         
-        // API: 获取 IP 池状态
         if (path === 'api/pool') {
             const poolData = await getIPPoolData(request);
             return new Response(JSON.stringify(poolData, null, 2), {
@@ -60,7 +54,6 @@ export default {
             });
         }
         
-        // API: 代理请求并返回内容
         if (path === 'api/fetch') {
             const targetUrl = url.searchParams.get('url');
             if (!targetUrl) {
@@ -97,7 +90,6 @@ export default {
             }
         }
         
-        // API: 代理请求并返回 JSON
         if (path === 'api/json') {
             const targetUrl = url.searchParams.get('url');
             if (!targetUrl) {
@@ -133,7 +125,6 @@ export default {
             }
         }
         
-        // API: 获取当前 PROXYIP
         if (path === 'api/proxyip') {
             return new Response(JSON.stringify({
                 success: true,
@@ -144,68 +135,73 @@ export default {
             });
         }
         
-        // API: 批量代理请求
-        if (path === 'api/batch') {
-            if (request.method !== 'POST') {
-                return new Response(JSON.stringify({ error: 'POST method required' }), {
-                    status: 405,
-                    headers: { 'Content-Type': 'application/json', ...corsHeaders }
-                });
-            }
-            try {
-                const body = await request.json();
-                const urls = body.urls || [];
-                if (!Array.isArray(urls) || urls.length === 0) {
-                    return new Response(JSON.stringify({ error: 'urls array required' }), {
-                        status: 400,
-                        headers: { 'Content-Type': 'application/json', ...corsHeaders }
-                    });
-                }
-                
-                const results = await Promise.allSettled(
-                    urls.slice(0, 10).map(async (targetUrl) => {
-                        const response = await fetch(targetUrl, {
-                            headers: { 'User-Agent': 'CFspider/1.0' }
-                        });
-                        return {
-                            url: targetUrl,
-                            status: response.status,
-                            content_length: parseInt(response.headers.get('Content-Length') || '0'),
-                            content_type: response.headers.get('Content-Type')
-                        };
-                    })
-                );
-                
-                return new Response(JSON.stringify({
-                    success: true,
-                    proxyip: 反代IP,
-                    results: results.map(r => 
-                        r.status === 'fulfilled' ? r.value : { error: r.reason?.message }
-                    )
-                }, null, 2), {
-                    headers: { 'Content-Type': 'application/json', ...corsHeaders }
-                });
-            } catch (error) {
-                return new Response(JSON.stringify({ error: error.message }), {
-                    status: 500,
-                    headers: { 'Content-Type': 'application/json', ...corsHeaders }
-                });
-            }
+        if (path === 'proxy') {
+            return handleProxyRequest(request, url, corsHeaders);
         }
         
-        // 404
         return new Response('NOT FOUND', { status: 404 });
     }
 };
 
-// 获取 IP 池数据
+async function handleProxyRequest(request, url, corsHeaders) {
+    const targetUrl = url.searchParams.get('url');
+    const method = url.searchParams.get('method') || 'GET';
+    
+    if (!targetUrl) {
+        return new Response(JSON.stringify({ error: 'Missing url parameter' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+        });
+    }
+    
+    const headers = {};
+    for (const [key, value] of request.headers.entries()) {
+        if (key.startsWith('x-cfspider-header-')) {
+            headers[key.replace('x-cfspider-header-', '')] = value;
+        }
+    }
+    
+    if (!headers['User-Agent']) {
+        headers['User-Agent'] = 'CFspider/1.0';
+    }
+    
+    try {
+        let body = null;
+        if (method !== 'GET' && method !== 'HEAD') {
+            body = await request.text();
+        }
+        
+        const response = await fetch(targetUrl, {
+            method: method,
+            headers: headers,
+            body: body || undefined
+        });
+        
+        const responseHeaders = new Headers();
+        for (const [key, value] of response.headers.entries()) {
+            responseHeaders.set(key, value);
+        }
+        responseHeaders.set('X-CF-Colo', request.cf?.colo || 'unknown');
+        responseHeaders.set('Access-Control-Allow-Origin', '*');
+        
+        return new Response(response.body, {
+            status: response.status,
+            headers: responseHeaders
+        });
+    } catch (error) {
+        return new Response(JSON.stringify({ error: error.message }), {
+            status: 502,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+        });
+    }
+}
+
 async function getIPPoolData(request) {
     const colo = request.cf?.colo || 'unknown';
     const country = request.cf?.country || 'unknown';
     const city = request.cf?.city || 'unknown';
     const region = request.cf?.region || 'unknown';
     
-    // Cloudflare 边缘节点信息
     const nodeInfo = {
         colo: colo,
         country: country,
@@ -215,7 +211,6 @@ async function getIPPoolData(request) {
         timezone: request.cf?.timezone || 'unknown'
     };
     
-    // 模拟 IP 池（实际使用时这些是 Cloudflare 的边缘 IP）
     const ipPool = [
         { ip: `${colo}.edge.cloudflare.com`, status: 'ONLINE', latency: Math.floor(Math.random() * 50 + 10), region: country },
         { ip: `172.64.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`, status: 'ONLINE', latency: Math.floor(Math.random() * 50 + 10), region: country },
@@ -234,14 +229,64 @@ async function getIPPoolData(request) {
     };
 }
 
-// 赛博朋克2077风格页面
-function generateCyberpunkPage(request) {
+function generateCyberpunkPage(request, url) {
     const colo = request.cf?.colo || 'UNKNOWN';
     const country = request.cf?.country || 'XX';
     const city = request.cf?.city || 'Night City';
+    const lang = url.searchParams.get('lang') || 'zh';
+    
+    const i18n = {
+        zh: {
+            subtitle: 'Cloudflare 代理网络',
+            nodeLocation: '节点位置',
+            country: '国家',
+            city: '城市',
+            status: '状态',
+            online: '在线',
+            poolTitle: '代理 IP 池',
+            ipAddress: 'IP 地址',
+            latency: '延迟',
+            region: '地区',
+            apiTitle: 'API 接口',
+            apiDesc1: '代理请求并返回内容',
+            apiDesc2: '代理请求并返回 JSON',
+            apiDesc3: '获取代理 IP 池状态',
+            apiDesc4: 'Python 客户端代理请求',
+            codeTitle: 'Python 使用示例',
+            loading: '加载中...',
+            error: '加载数据失败',
+            langSwitch: 'EN',
+            footer: '由 Cloudflare Workers 驱动'
+        },
+        en: {
+            subtitle: 'Cloudflare Proxy Network',
+            nodeLocation: 'Node Location',
+            country: 'Country',
+            city: 'City',
+            status: 'Status',
+            online: 'ONLINE',
+            poolTitle: 'PROXY IP POOL',
+            ipAddress: 'IP ADDRESS',
+            latency: 'LATENCY',
+            region: 'REGION',
+            apiTitle: 'API ENDPOINTS',
+            apiDesc1: 'Proxy request and return content',
+            apiDesc2: 'Proxy request and return JSON',
+            apiDesc3: 'Get proxy IP pool status',
+            apiDesc4: 'Python client proxy request',
+            codeTitle: 'Python Example',
+            loading: 'LOADING...',
+            error: 'ERROR LOADING DATA',
+            langSwitch: '中文',
+            footer: 'Powered by Cloudflare Workers'
+        }
+    };
+    
+    const t = i18n[lang] || i18n.zh;
+    const switchLang = lang === 'zh' ? 'en' : 'zh';
     
     return `<!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="${lang === 'zh' ? 'zh-CN' : 'en'}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -269,7 +314,6 @@ function generateCyberpunkPage(request) {
             position: relative;
         }
         
-        /* 网格背景 */
         body::before {
             content: '';
             position: fixed;
@@ -291,7 +335,6 @@ function generateCyberpunkPage(request) {
             100% { transform: perspective(500px) rotateX(60deg) translateY(50px); }
         }
         
-        /* 扫描线效果 */
         body::after {
             content: '';
             position: fixed;
@@ -318,7 +361,30 @@ function generateCyberpunkPage(request) {
             z-index: 1;
         }
         
-        /* 标题区域 */
+        .lang-switch {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1001;
+        }
+        
+        .lang-btn {
+            background: rgba(0, 240, 255, 0.1);
+            border: 1px solid var(--cyber-cyan);
+            color: var(--cyber-cyan);
+            padding: 8px 16px;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+        }
+        
+        .lang-btn:hover {
+            background: var(--cyber-cyan);
+            color: var(--cyber-dark);
+        }
+        
         .header {
             text-align: center;
             margin-bottom: 60px;
@@ -338,18 +404,6 @@ function generateCyberpunkPage(request) {
             position: relative;
         }
         
-        .logo::before, .logo::after {
-            content: 'CFSPIDER';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            background: linear-gradient(180deg, var(--cyber-cyan) 0%, var(--cyber-blue) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            opacity: 0;
-        }
-        
         @keyframes glitch {
             0%, 90%, 100% { opacity: 1; transform: translate(0); }
             91% { opacity: 0.8; transform: translate(-2px, 1px); }
@@ -365,7 +419,6 @@ function generateCyberpunkPage(request) {
             text-transform: uppercase;
         }
         
-        /* 状态卡片 */
         .status-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -412,7 +465,6 @@ function generateCyberpunkPage(request) {
             color: var(--cyber-yellow);
         }
         
-        /* IP 池表格 */
         .pool-section {
             background: rgba(0, 0, 0, 0.5);
             border: 1px solid var(--cyber-magenta);
@@ -422,7 +474,7 @@ function generateCyberpunkPage(request) {
         }
         
         .pool-section::before {
-            content: 'PROXY IP POOL';
+            content: '${t.poolTitle}';
             position: absolute;
             top: -12px;
             left: 20px;
@@ -464,15 +516,10 @@ function generateCyberpunkPage(request) {
             text-shadow: 0 0 10px #00ff88;
         }
         
-        .status-offline {
-            color: var(--cyber-magenta);
-        }
-        
         .latency-good { color: #00ff88; }
         .latency-medium { color: var(--cyber-yellow); }
         .latency-bad { color: var(--cyber-magenta); }
         
-        /* API 区域 */
         .api-section {
             background: rgba(0, 0, 0, 0.5);
             border: 1px solid var(--cyber-blue);
@@ -522,7 +569,6 @@ function generateCyberpunkPage(request) {
             margin-top: 8px;
         }
         
-        /* Python 代码 */
         .code-section {
             background: #0d0d0d;
             border: 2px solid var(--cyber-purple);
@@ -534,7 +580,7 @@ function generateCyberpunkPage(request) {
         }
         
         .code-section::before {
-            content: 'PYTHON';
+            content: '${t.codeTitle}';
             position: absolute;
             top: 10px;
             right: 15px;
@@ -557,7 +603,6 @@ function generateCyberpunkPage(request) {
         .code-function { color: #8be9fd; }
         .code-comment { color: #6272a4; }
         
-        /* 底部 */
         .footer {
             text-align: center;
             padding: 40px 0;
@@ -573,7 +618,6 @@ function generateCyberpunkPage(request) {
             text-shadow: 0 0 10px var(--cyber-cyan);
         }
         
-        /* 闪烁光标 */
         .cursor {
             display: inline-block;
             width: 10px;
@@ -588,7 +632,6 @@ function generateCyberpunkPage(request) {
             50% { opacity: 0; }
         }
         
-        /* 加载动画 */
         .loading {
             display: inline-block;
             width: 20px;
@@ -603,7 +646,6 @@ function generateCyberpunkPage(request) {
             to { transform: rotate(360deg); }
         }
         
-        /* 响应式 */
         @media (max-width: 768px) {
             .logo { font-size: 2.5rem; }
             .subtitle { font-size: 0.9rem; letter-spacing: 0.2em; }
@@ -612,28 +654,32 @@ function generateCyberpunkPage(request) {
     </style>
 </head>
 <body>
+    <div class="lang-switch">
+        <a href="?lang=${switchLang}" class="lang-btn">${t.langSwitch}</a>
+    </div>
+    
     <div class="container">
         <header class="header">
             <h1 class="logo">CFSPIDER</h1>
-            <p class="subtitle">Cloudflare Proxy Network</p>
+            <p class="subtitle">${t.subtitle}</p>
         </header>
         
         <div class="status-grid">
             <div class="status-card">
-                <div class="status-label">Node Location</div>
+                <div class="status-label">${t.nodeLocation}</div>
                 <div class="status-value">${colo}</div>
             </div>
             <div class="status-card">
-                <div class="status-label">Country</div>
+                <div class="status-label">${t.country}</div>
                 <div class="status-value">${country}</div>
             </div>
             <div class="status-card">
-                <div class="status-label">City</div>
+                <div class="status-label">${t.city}</div>
                 <div class="status-value">${city}</div>
             </div>
             <div class="status-card">
-                <div class="status-label">Status</div>
-                <div class="status-value status-online">ONLINE</div>
+                <div class="status-label">${t.status}</div>
+                <div class="status-value status-online">${t.online}</div>
             </div>
         </div>
         
@@ -641,39 +687,39 @@ function generateCyberpunkPage(request) {
             <table class="pool-table" id="poolTable">
                 <thead>
                     <tr>
-                        <th>IP ADDRESS</th>
-                        <th>STATUS</th>
-                        <th>LATENCY</th>
-                        <th>REGION</th>
+                        <th>${t.ipAddress}</th>
+                        <th>${t.status}</th>
+                        <th>${t.latency}</th>
+                        <th>${t.region}</th>
                     </tr>
                 </thead>
                 <tbody id="poolBody">
-                    <tr><td colspan="4" style="text-align:center;"><span class="loading"></span> LOADING...</td></tr>
+                    <tr><td colspan="4" style="text-align:center;"><span class="loading"></span> ${t.loading}</td></tr>
                 </tbody>
             </table>
         </div>
         
         <div class="api-section">
-            <h2>// API ENDPOINTS</h2>
+            <h2>// ${t.apiTitle}</h2>
             <div class="api-item">
                 <span class="api-method">GET</span>
                 <span class="api-path">/api/fetch?url=https://example.com</span>
-                <div class="api-desc">Proxy request and return content</div>
+                <div class="api-desc">${t.apiDesc1}</div>
             </div>
             <div class="api-item">
                 <span class="api-method">GET</span>
                 <span class="api-path">/api/json?url=https://httpbin.org/ip</span>
-                <div class="api-desc">Proxy request and return JSON</div>
+                <div class="api-desc">${t.apiDesc2}</div>
             </div>
             <div class="api-item">
                 <span class="api-method">GET</span>
                 <span class="api-path">/api/pool</span>
-                <div class="api-desc">Get proxy IP pool status</div>
+                <div class="api-desc">${t.apiDesc3}</div>
             </div>
             <div class="api-item">
                 <span class="api-method">POST</span>
-                <span class="api-path">/api/batch</span>
-                <div class="api-desc">Batch proxy requests {"urls": [...]}</div>
+                <span class="api-path">/proxy?url=...&method=GET</span>
+                <div class="api-desc">${t.apiDesc4}</div>
             </div>
         </div>
         
@@ -681,21 +727,24 @@ function generateCyberpunkPage(request) {
             <pre><span class="code-comment"># pip install cfspider</span>
 <span class="code-keyword">import</span> cfspider
 
+cf_proxies = <span class="code-string">"https://your-workers.dev"</span>
+
 response = cfspider.<span class="code-function">get</span>(
     <span class="code-string">"https://httpbin.org/ip"</span>,
-    cf_proxies=<span class="code-string">"https://ip.kami666.xyz"</span>
+    cf_proxies=cf_proxies
 )
 <span class="code-function">print</span>(response.text)  <span class="code-comment"># Cloudflare IP</span></pre>
         </div>
         
         <footer class="footer">
             <p>CFSPIDER v1.0.0 // <a href="https://github.com/violettoolssite/CFspider" target="_blank">GITHUB</a> // <a href="https://pypi.org/project/cfspider/" target="_blank">PYPI</a></p>
-            <p style="margin-top:10px;">POWERED BY CLOUDFLARE WORKERS<span class="cursor"></span></p>
+            <p style="margin-top:10px;">${t.footer}<span class="cursor"></span></p>
         </footer>
     </div>
     
     <script>
-        // 加载 IP 池数据
+        const errorMsg = "${t.error}";
+        
         async function loadPool() {
             try {
                 const resp = await fetch('/api/pool');
@@ -708,7 +757,7 @@ response = cfspider.<span class="code-function">get</span>(
                                            item.latency < 60 ? 'latency-medium' : 'latency-bad';
                         return \`<tr>
                             <td style="font-family:'Share Tech Mono',monospace;color:#fff;">\${item.ip}</td>
-                            <td class="\${item.status === 'ONLINE' ? 'status-online' : 'status-offline'}">\${item.status}</td>
+                            <td class="status-online">\${item.status}</td>
                             <td class="\${latencyClass}">\${item.latency}ms</td>
                             <td>\${item.region}</td>
                         </tr>\`;
@@ -716,14 +765,11 @@ response = cfspider.<span class="code-function">get</span>(
                 }
             } catch (e) {
                 document.getElementById('poolBody').innerHTML = 
-                    '<tr><td colspan="4" style="color:#ff2a6d;">ERROR LOADING DATA</td></tr>';
+                    '<tr><td colspan="4" style="color:#ff2a6d;">' + errorMsg + '</td></tr>';
             }
         }
         
-        // 页面加载后获取数据
         loadPool();
-        
-        // 每30秒刷新
         setInterval(loadPool, 30000);
     </script>
 </body>
