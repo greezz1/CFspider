@@ -449,9 +449,10 @@ function generateCyberpunkPage(request) {
         }
         
         .pool-table td {
-            padding: 12px 10px;
+            padding: 15px 12px;
             border-bottom: 1px solid rgba(0, 240, 255, 0.2);
-            font-size: 0.9rem;
+            font-size: 1rem;
+            color: #ddd;
         }
         
         .pool-table tr:hover {
@@ -516,19 +517,20 @@ function generateCyberpunkPage(request) {
         }
         
         .api-desc {
-            color: #888;
-            font-size: 0.85rem;
+            color: #aaa;
+            font-size: 0.95rem;
             margin-top: 8px;
         }
         
         /* Python 代码 */
         .code-section {
-            background: #0a0a0a;
-            border: 1px solid var(--cyber-purple);
-            padding: 25px;
+            background: #0d0d0d;
+            border: 2px solid var(--cyber-purple);
+            padding: 30px;
             margin-bottom: 40px;
             position: relative;
             overflow: hidden;
+            box-shadow: 0 0 20px rgba(123, 44, 191, 0.3);
         }
         
         .code-section::before {
@@ -536,35 +538,39 @@ function generateCyberpunkPage(request) {
             position: absolute;
             top: 10px;
             right: 15px;
-            font-size: 0.7rem;
+            font-size: 0.8rem;
             color: var(--cyber-purple);
             letter-spacing: 0.2em;
+            font-weight: bold;
         }
         
         .code-section pre {
-            color: #e0e0e0;
-            font-size: 0.85rem;
-            line-height: 1.6;
+            color: #ffffff;
+            font-size: 1.1rem;
+            line-height: 1.8;
             overflow-x: auto;
+            text-shadow: 0 0 5px rgba(255,255,255,0.1);
         }
         
-        .code-keyword { color: var(--cyber-magenta); }
-        .code-string { color: var(--cyber-yellow); }
-        .code-function { color: var(--cyber-cyan); }
-        .code-comment { color: #666; }
+        .code-keyword { color: #ff79c6; font-weight: bold; }
+        .code-string { color: #f1fa8c; }
+        .code-function { color: #8be9fd; }
+        .code-comment { color: #6272a4; }
         
         /* 底部 */
         .footer {
             text-align: center;
             padding: 40px 0;
-            color: #444;
-            font-size: 0.8rem;
+            color: #888;
+            font-size: 1rem;
             letter-spacing: 0.2em;
         }
         
         .footer a {
             color: var(--cyber-cyan);
             text-decoration: none;
+            font-weight: bold;
+            text-shadow: 0 0 10px var(--cyber-cyan);
         }
         
         /* 闪烁光标 */
