@@ -25,8 +25,56 @@
 
 ## 安装
 
+### 方式一：PyPI 安装（推荐）
+
 ```bash
 pip install cfspider
+```
+
+> **注意**：Python 3.11+ 在 Debian/Ubuntu 上可能提示 `externally-managed-environment` 错误，请使用以下任一方式解决：
+> 
+> ```bash
+> # 方式 A：使用虚拟环境（推荐）
+> python3 -m venv venv
+> source venv/bin/activate
+> pip install cfspider
+> 
+> # 方式 B：使用 pipx
+> pipx install cfspider
+> 
+> # 方式 C：强制安装（不推荐）
+> pip install cfspider --break-system-packages
+> ```
+
+### 方式二：国内镜像源安装
+
+如果 PyPI 访问较慢，可使用国内镜像：
+
+```bash
+# 清华源
+pip install cfspider -i https://pypi.tuna.tsinghua.edu.cn/simple
+
+# 阿里云源
+pip install cfspider -i https://mirrors.aliyun.com/pypi/simple
+
+# 中科大源
+pip install cfspider -i https://pypi.mirrors.ustc.edu.cn/simple
+```
+
+### 方式三：从 GitHub 安装
+
+```bash
+pip install git+https://github.com/violettoolssite/CFspider.git
+```
+
+### 方式四：手动安装
+
+从官网下载 `cfspider.zip` 后解压：
+
+```bash
+# 下载地址：https://spider.violetteam.cloud/cfspider.zip
+unzip cfspider.zip
+pip install ./cfspider
 ```
 
 ## 快速开始
