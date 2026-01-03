@@ -283,7 +283,11 @@ cfspider.install_browser()
 ```python
 import cfspider
 
-browser = cfspider.Browser(cf_proxies="https://your-workers.dev")
+# 直接使用（无代理）
+browser = cfspider.Browser()
+
+# 或使用自定义代理（HTTP/SOCKS5）
+# browser = cfspider.Browser(proxy="http://127.0.0.1:20000")
 
 # 获取 JavaScript 渲染后的完整 HTML
 html = browser.html("https://example.com")
@@ -297,7 +301,7 @@ browser.close()
 ```python
 import cfspider
 
-browser = cfspider.Browser(cf_proxies="https://your-workers.dev")
+browser = cfspider.Browser()
 
 # 截图并保存
 browser.screenshot("https://example.com", "screenshot.png")
@@ -313,7 +317,7 @@ browser.close()
 ```python
 import cfspider
 
-browser = cfspider.Browser(cf_proxies="https://your-workers.dev")
+browser = cfspider.Browser()
 
 # 生成 PDF（仅无头模式可用）
 browser.pdf("https://example.com", "page.pdf")
@@ -326,7 +330,7 @@ browser.close()
 ```python
 import cfspider
 
-browser = cfspider.Browser(cf_proxies="https://your-workers.dev")
+browser = cfspider.Browser()
 
 # 打开页面，返回 Playwright Page 对象
 page = browser.get("https://example.com")
@@ -353,7 +357,7 @@ browser.close()
 ```python
 import cfspider
 
-browser = cfspider.Browser(cf_proxies="https://your-workers.dev")
+browser = cfspider.Browser()
 
 # 在页面中执行 JavaScript
 result = browser.execute_script("https://example.com", "return document.title")
@@ -367,7 +371,7 @@ browser.close()
 ```python
 import cfspider
 
-with cfspider.Browser(cf_proxies="https://your-workers.dev") as browser:
+with cfspider.Browser() as browser:
     html = browser.html("https://example.com")
     print(html)
 # 自动关闭浏览器
@@ -379,10 +383,7 @@ with cfspider.Browser(cf_proxies="https://your-workers.dev") as browser:
 import cfspider
 
 # headless=False 可以看到浏览器窗口
-browser = cfspider.Browser(
-    cf_proxies="https://your-workers.dev",
-    headless=False
-)
+browser = cfspider.Browser(headless=False)
 
 page = browser.get("https://example.com")
 # 可以看到浏览器操作
