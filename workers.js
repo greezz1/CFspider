@@ -972,13 +972,87 @@ function generateCyberpunkPage(request, url, visitorIP) {
             font-size: 0.85rem;
         }
         
-        @media (max-width: 768px) {
-            .logo { font-size: 2.5rem; }
-            .subtitle { font-size: 0.85rem; letter-spacing: 0.2em; }
-            .status-grid { grid-template-columns: repeat(2, 1fr); }
+        /* 大屏幕 */
+        @media (max-width: 1200px) {
+            .container { padding: 30px 30px; }
+            .status-grid { grid-template-columns: repeat(3, 1fr); }
+        }
+        
+        /* 中等屏幕 */
+        @media (max-width: 1024px) {
+            .logo { font-size: 3rem; }
+            .status-grid { grid-template-columns: repeat(3, 1fr); }
             .info-grid { grid-template-columns: 1fr; }
-            .api-grid { grid-template-columns: 1fr; }
             .features-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        
+        /* 平板 */
+        @media (max-width: 768px) {
+            .container { padding: 20px 15px; }
+            .lang-switch { top: 10px; right: 10px; }
+            .lang-btn { padding: 6px 12px; font-size: 0.8rem; }
+            .logo { font-size: 2.2rem; }
+            .subtitle { font-size: 0.75rem; letter-spacing: 0.15em; }
+            .badge { font-size: 0.7rem; padding: 4px 10px; }
+            .section { padding: 20px 15px; margin-bottom: 20px; }
+            .section-title { font-size: 1rem; }
+            .status-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+            .status-item { padding: 15px 12px; }
+            .status-value { font-size: 1.4rem; }
+            .status-label { font-size: 0.75rem; }
+            .info-grid { grid-template-columns: 1fr; gap: 15px; }
+            .info-item { padding: 12px; }
+            .info-label { font-size: 0.75rem; }
+            .info-value { font-size: 0.85rem; }
+            .api-grid { grid-template-columns: 1fr; gap: 12px; }
+            .api-item { padding: 12px; }
+            .api-method { font-size: 0.65rem; padding: 3px 8px; }
+            .api-path { font-size: 0.75rem; }
+            .api-desc { font-size: 0.8rem; }
+            .features-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
+            .feature-item { padding: 15px 12px; }
+            .feature-title { font-size: 0.85rem; }
+            .feature-desc { font-size: 0.75rem; }
+            .code-block { padding: 12px; font-size: 0.7rem; }
+            .code-block pre { font-size: 0.7rem; }
+            table { font-size: 0.8rem; }
+            th, td { padding: 10px 8px; }
+            .footer { padding: 15px; font-size: 0.75rem; }
+        }
+        
+        /* 小屏幕手机 */
+        @media (max-width: 480px) {
+            .container { padding: 15px 10px; }
+            .logo { font-size: 1.8rem; }
+            .subtitle { font-size: 0.65rem; letter-spacing: 0.1em; }
+            .badge { font-size: 0.6rem; padding: 3px 8px; margin: 3px; }
+            .section { padding: 15px 12px; }
+            .section-title { font-size: 0.9rem; margin-bottom: 12px; }
+            .status-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+            .status-item { padding: 12px 10px; }
+            .status-value { font-size: 1.2rem; }
+            .status-label { font-size: 0.7rem; }
+            .features-grid { grid-template-columns: 1fr; }
+            .feature-item { padding: 12px 10px; }
+            .code-block { padding: 10px; overflow-x: auto; }
+            .code-block pre { font-size: 0.65rem; white-space: pre-wrap; word-break: break-all; }
+            th, td { padding: 8px 6px; font-size: 0.75rem; }
+            .api-path { word-break: break-all; }
+        }
+        
+        /* 超小屏幕 */
+        @media (max-width: 360px) {
+            .logo { font-size: 1.5rem; }
+            .status-value { font-size: 1rem; }
+            .lang-btn { padding: 5px 10px; font-size: 0.75rem; }
+        }
+        
+        /* 横屏模式优化 */
+        @media (max-height: 500px) and (orientation: landscape) {
+            .container { padding: 15px 20px; }
+            .logo { font-size: 2rem; margin-bottom: 10px; }
+            .subtitle { margin-bottom: 15px; }
+            .section { padding: 15px; margin-bottom: 15px; }
         }
     </style>
 </head>
