@@ -10,6 +10,5 @@ build/
 *.egg-info/
 __pycache__/
 
-# 测试文件
-test*.py
+# 临时文件
 edgetunnel_proxy.py
