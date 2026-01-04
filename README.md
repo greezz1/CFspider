@@ -390,6 +390,8 @@ response = cfspider.get(
 
 启用 HTTP/2 可以获得更好的性能（连接复用、头部压缩等）：
 
+> **注意**: `http2` 和 `impersonate` 参数使用不同后端（httpx vs curl_cffi），不能同时启用。
+
 ```python
 import cfspider
 
