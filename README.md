@@ -1045,7 +1045,7 @@ edgetunnel 是一个优秀的 Cloudflare Workers VLESS 代理实现，感谢 [@c
 
 ## License
 
-MIT License
+Apache License 2.0
 
 ## 链接
 
