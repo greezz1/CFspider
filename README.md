@@ -12,6 +12,13 @@
 
 ![Workers 部署界面](workers.png)
 
+## 视频教程
+
+**如何用 Cloudflare Workers 免费搭建代理 IP 池**
+
+- [点击观看 B 站视频教程](https://b23.tv/1uzOf7M)
+- [点击观看 YouTube 视频教程](https://youtu.be/oPeXiIFJ9TA?si=ukXsX8iP86ZTB4LP)
+
 > ⚠️ **重要声明**：本项目仅供学习研究、网络安全测试、合规数据采集等**合法用途**。使用者须遵守所在地法律法规及 Cloudflare 服务条款。**任何非法使用（包括但不限于网络攻击、侵犯隐私、规避版权保护等）均与本项目开发者无关，使用者自行承担全部法律责任。**
 
 ## 代理方案对比
@@ -1321,4 +1328,6 @@ Apache License 2.0
 - GitHub: https://github.com/violettoolssite/CFspider
 - PyPI: https://pypi.org/project/cfspider/
 - 官网: https://spider.violetteam.cloud
+- B 站视频教程: https://b23.tv/1uzOf7M
+- YouTube 视频教程: https://youtu.be/oPeXiIFJ9TA?si=ukXsX8iP86ZTB4LP
 - edgetunnel: https://github.com/cmliu/edgetunnel
