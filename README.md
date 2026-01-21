@@ -4,7 +4,7 @@
 [![Python](https://img.shields.io/pypi/pyversions/cfspider)](https://pypi.org/project/cfspider/)
 [![License](https://img.shields.io/github/license/violettoolssite/CFspider)](LICENSE)
 
-**v1.8.2** - 基于 VLESS 协议的免费代理 IP 池，利用 Cloudflare 全球 300+ 边缘节点作为出口，**完全隐藏 CF 特征**，支持隐身模式、TLS 指纹模拟、网页镜像和浏览器自动化。
+**v1.8.3** - 基于 VLESS 协议的免费代理 IP 池，利用 Cloudflare 全球 300+ 边缘节点作为出口，**完全隐藏 CF 特征**，支持隐身模式、TLS 指纹模拟、网页镜像和浏览器自动化。
 
 ## 支持 v2ray/Xray 客户端
 
@@ -31,20 +31,20 @@
 vless://你的UUID@your-workers.dev:443?encryption=none&security=tls&type=ws&host=your-workers.dev&path=%2F你的UUID#CFspider
 ```
 
-## v1.8.2 新特性
+## v1.8.3 新特性
 
 | 特性 | 说明 |
 |------|------|
 | **VLESS 协议** | 使用 VLESS 协议代理，完全隐藏 CF-Ray、CF-Worker 等 Cloudflare 头 |
 | **v2ray 支持** | 支持 v2rayN/v2rayNG/Clash 等客户端直接使用 |
 | **动态 IP 池** | 每次请求自动获取新的出口 IP，从 300+ 全球节点选择 |
+| **固定 IP 模式** | 新增 `static_ip` 参数，支持保持同一 IP 进行多次请求 |
 | **UUID 安全** | 支持自定义 UUID，配置后需手动填写，默认 UUID 界面显示警告 |
 | **简化 API** | 只需填写 Workers 地址，自动获取配置 |
-| **动态代码示例** | Workers 界面根据 UUID 配置显示正确的 Python 代码 |
 
 ## 核心优势：VLESS 动态 IP 池
 
-> **CFspider v1.8.2 采用 VLESS 协议**，每次请求自动获取新的出口 IP，自动从 300+ 全球节点中选择最优节点。**完全隐藏 Cloudflare 特征**（无 CF-Ray、CF-Worker、Cf-Connecting-Ip 等头），实现真正的匿名代理。
+> **CFspider v1.8.3 采用 VLESS 协议**，每次请求自动获取新的出口 IP，自动从 300+ 全球节点中选择最优节点。**完全隐藏 Cloudflare 特征**（无 CF-Ray、CF-Worker、Cf-Connecting-Ip 等头），实现真正的匿名代理。
 
 ### 动态 IP 池的优势
 
@@ -55,17 +55,30 @@ vless://你的UUID@your-workers.dev:443?encryption=none&security=tls&type=ws&hos
 | **地理分布** | 模拟真实用户的地理分布，请求更自然 |
 | **自动优化** | 根据目标网站位置和网络状况自动选择节点 |
 
-**与静态 IP 代理对比：**
+**动态 IP vs 固定 IP：**
 
 ```python
-# 静态 IP 代理：固定 IP，容易被封
-proxies = {"http": "1.2.3.4:8080"}  # 固定 IP
+import cfspider
 
-# CFspider 动态 IP 池：每次请求自动获取新 IP
-response = cfspider.get("https://example.com", cf_proxies="https://your-workers.dev")
-print(response.json()['origin'])  # 每次都是不同的出口 IP
-# 完全隐藏 CF 特征，目标网站无法检测到使用了 Cloudflare
+# 动态 IP 模式（默认）- 每次请求自动获取新 IP
+for i in range(5):
+    response = cfspider.get("https://httpbin.org/ip", cf_proxies="https://your-workers.dev")
+    print(response.json()['origin'])  # 每次都是不同的 IP
+
+# 固定 IP 模式 - 保持使用同一个 IP（适合需要会话一致性的场景）
+for i in range(5):
+    response = cfspider.get("https://httpbin.org/ip", cf_proxies="https://your-workers.dev", static_ip=True)
+    print(response.json()['origin'])  # 每次都是相同的 IP
 ```
+
+**v2ray 客户端的 IP 变化机制：**
+
+| 操作 | IP 是否变化 |
+|------|-------------|
+| 保持连接 | 不变（同一个 WebSocket 连接期间 IP 保持稳定） |
+| 断开重连 | 变化（重新连接会获得新的出口 IP） |
+
+> 如需在 v2ray 中换 IP，断开连接后重新连接即可获取新的出口 IP。
 
 ## 项目截图
 
