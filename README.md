@@ -435,13 +435,22 @@ cfspider install
 ```python
 import cfspider
 
-# 只需填写 Workers 地址，每次请求自动获取新 IP
+# 动态 IP 模式（默认）- 每次请求自动获取新 IP
 for i in range(5):
     response = cfspider.get(
         "https://httpbin.org/ip",
         cf_proxies="https://your-workers.dev"
     )
     print(response.json()['origin'])  # 每次都是不同的 IP
+
+# 固定 IP 模式 - 保持使用同一个 IP（适合会话一致性场景）
+for i in range(5):
+    response = cfspider.get(
+        "https://httpbin.org/ip",
+        cf_proxies="https://your-workers.dev",
+        static_ip=True  # 保持同一个 IP
+    )
+    print(response.json()['origin'])  # 每次都是相同的 IP
 ```
 
 ### 浏览器模式
@@ -493,7 +502,13 @@ cfspider.patch(url, cf_proxies=cf_proxies, json=data)
 | 参数 | 类型 | 说明 |
 |------|------|------|
 | url | str | 目标 URL |
-| cf_proxies | str | Workers 地址（必填） |
+| cf_proxies | str | Workers 地址 |
+| uuid | str | VLESS UUID（可选，不填自动获取） |
+| static_ip | bool | 是否使用固定 IP（默认 False，每次换 IP） |
+| stealth | bool | 是否启用隐身模式（默认 False） |
+| impersonate | str | TLS 指纹模拟（如 chrome131） |
+| http2 | bool | 是否启用 HTTP/2（默认 False） |
+| delay | tuple | 请求前随机延迟，如 (1, 3) |
 | params | dict | URL 查询参数 |
 | data | dict/str | 表单数据 |
 | json | dict | JSON 数据 |
