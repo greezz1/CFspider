@@ -824,45 +824,43 @@ def get(url, cf_proxies=None, uuid=None, http2=False, impersonate=None,
     发送 GET 请求 / Send GET request
     
     每次请求自动获取新的出口 IP。
-    Automatically gets a new exit IP for each request.
     
     Args:
-        url (str): 目标 URL / Target URL (must include protocol, e.g., https://)
-        cf_proxies (str, optional): CFspider Workers 地址 / CFspider Workers address
-            - 如 "https://cfspider.violetqqcom.workers.dev"
-            - 不填写时：直接请求，不使用代理 / None: Direct request without proxy
-        uuid (str, optional): VLESS UUID（可选，不填则自动获取）
-            - 不填写会自动从 Workers 首页获取
-            - When not provided, UUID is auto-fetched from Workers
-        http2 (bool): 是否启用 HTTP/2 协议（默认 False）
-        impersonate (str, optional): TLS 指纹模拟
-            - 可选值：chrome131, chrome124, safari18_0, firefox133, edge101 等
-        map_output (bool): 是否生成 IP 地图 HTML 文件（默认 False）
-        map_file (str): 地图输出文件名（默认 "cfspider_map.html"）
-        stealth (bool): 是否启用隐身模式（默认 False）
-        stealth_browser (str): 隐身模式浏览器类型（默认 'chrome'）
-        delay (tuple, optional): 请求前随机延迟范围（秒），如 (1, 3)
+        url: 目标 URL（必须包含协议，如 https://）
+        
+        cf_proxies: CFspider Workers 地址（可选）
+            如 "https://cfspider.violetqqcom.workers.dev"
+            不填写时直接请求，不使用代理
+        
+        uuid: VLESS UUID（可选）
+            不填写会自动从 Workers 获取
+        
+        http2: 是否启用 HTTP/2 协议（默认 False）
+        
+        impersonate: TLS 指纹模拟（可选）
+            可选值: chrome131, safari18_0, firefox133, edge101 等
+        
+        map_output: 是否生成 IP 地图 HTML 文件（默认 False）
+        
+        map_file: 地图输出文件名（默认 "cfspider_map.html"）
+        
+        stealth: 是否启用隐身模式（默认 False）
+        
+        stealth_browser: 隐身模式浏览器类型（默认 'chrome'）
+        
+        delay: 请求前随机延迟范围（秒），如 (1, 3)
+        
         **kwargs: 其他参数，与 requests 库完全兼容
     
     Returns:
         CFSpiderResponse: 响应对象
     
-    Examples:
-        >>> import cfspider
-        >>> 
-        >>> # 使用 Workers 代理（自动获取 UUID，每次新 IP）
+    Example:
         >>> response = cfspider.get(
         ...     "https://httpbin.org/ip",
         ...     cf_proxies="https://cfspider.violetqqcom.workers.dev"
         ... )
-        >>> 
-        >>> # 多次请求自动获取不同 IP
-        >>> for i in range(5):
-        ...     response = cfspider.get(
-        ...         "https://httpbin.org/ip",
-        ...         cf_proxies="https://cfspider.violetqqcom.workers.dev"
-        ...     )
-        ...     print(response.json()['origin'])  # 每次都是不同 IP
+        >>> print(response.json()['origin'])
     """
     return request("GET", url, cf_proxies=cf_proxies, uuid=uuid, 
                    http2=http2, impersonate=impersonate,
