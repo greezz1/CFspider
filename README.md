@@ -6,11 +6,37 @@
 
 **v1.8.2** - 基于 VLESS 协议的免费代理 IP 池，利用 Cloudflare 全球 300+ 边缘节点作为出口，**完全隐藏 CF 特征**，支持隐身模式、TLS 指纹模拟、网页镜像和浏览器自动化。
 
+## 📱 支持 v2ray/Xray 客户端
+
+> **CFspider Workers 支持标准 VLESS 协议**，可直接在 v2ray/Xray 客户端中使用！
+
+部署 Workers 后，访问首页即可获取 VLESS 链接，支持导入到以下客户端：
+
+| 平台 | 支持的客户端 |
+|------|-------------|
+| **Windows** | v2rayN, Clash Verge, NekoRay |
+| **macOS** | V2rayU, ClashX Pro, Surge |
+| **Linux** | v2rayA, Clash |
+| **Android** | v2rayNG, Clash for Android, NekoBox |
+| **iOS** | Shadowrocket, Quantumult X, Surge |
+
+**使用方式：**
+
+1. 部署 `workers.js` 到 Cloudflare Workers
+2. 访问 Workers 首页获取 VLESS 链接（格式：`vless://uuid@host:443?...`）
+3. 复制链接导入到任意支持 VLESS 的客户端
+4. 即可使用 Cloudflare 全球节点作为代理出口
+
+```
+vless://你的UUID@your-workers.dev:443?encryption=none&security=tls&type=ws&host=your-workers.dev&path=%2F你的UUID#CFspider
+```
+
 ## 🚀 v1.8.2 新特性
 
 | 特性 | 说明 |
 |------|------|
 | **🔐 VLESS 协议** | 使用 VLESS 协议代理，完全隐藏 CF-Ray、CF-Worker 等 Cloudflare 头 |
+| **📱 v2ray 支持** | 支持 v2rayN/v2rayNG/Clash 等客户端直接使用 |
 | **🌐 动态 IP 池** | 每次请求自动获取新的出口 IP，从 300+ 全球节点选择 |
 | **🔑 UUID 安全** | 支持自定义 UUID，配置后需手动填写，默认 UUID 界面显示警告 |
 | **📝 简化 API** | 只需填写 Workers 地址，自动获取配置 |
