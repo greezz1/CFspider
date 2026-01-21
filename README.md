@@ -1640,6 +1640,8 @@ edgetunnel 是一个优秀的 Cloudflare Workers VLESS 代理实现，感谢 [@c
 
 感谢所有为本项目做出贡献的开发者：
 
+- [@violettoolssite](https://github.com/violettoolssite) - 项目创建者与维护者
+- [@pooneyy](https://github.com/pooneyy) - 代码贡献
 - [@cmliu](https://github.com/cmliu) - edgetunnel VLESS 协议实现
 - Claude (Anthropic) - v1.8.2 代码重构与 VLESS 集成
 
