@@ -1,10 +1,24 @@
 # CFspider - Cloudflare Workers Spider
 
-免费的代理 IP 池，利用 Cloudflare 全球 300+ 边缘节点作为出口，支持隐身模式、TLS 指纹模拟、网页镜像和浏览器自动化。
+[![PyPI version](https://img.shields.io/pypi/v/cfspider)](https://pypi.org/project/cfspider/)
+[![Python](https://img.shields.io/pypi/pyversions/cfspider)](https://pypi.org/project/cfspider/)
+[![License](https://img.shields.io/github/license/violettoolssite/CFspider)](LICENSE)
 
-## ⚡ 核心优势：动态 IP 池
+**v1.8.2** - 基于 VLESS 协议的免费代理 IP 池，利用 Cloudflare 全球 300+ 边缘节点作为出口，**完全隐藏 CF 特征**，支持隐身模式、TLS 指纹模拟、网页镜像和浏览器自动化。
 
-> **CFspider 是动态 IP 池**，每次请求自动获取新的出口 IP，自动从 300+ 全球节点中选择最优节点。完全隐藏 Cloudflare 特征（无 CF-Ray、CF-Worker 等头），实现真正的匿名代理。
+## 🚀 v1.8.2 新特性
+
+| 特性 | 说明 |
+|------|------|
+| **🔐 VLESS 协议** | 使用 VLESS 协议代理，完全隐藏 CF-Ray、CF-Worker 等 Cloudflare 头 |
+| **🌐 动态 IP 池** | 每次请求自动获取新的出口 IP，从 300+ 全球节点选择 |
+| **🔑 UUID 安全** | 支持自定义 UUID，配置后需手动填写，默认 UUID 界面显示警告 |
+| **📝 简化 API** | 只需填写 Workers 地址，自动获取配置 |
+| **💻 动态代码示例** | Workers 界面根据 UUID 配置显示正确的 Python 代码 |
+
+## ⚡ 核心优势：VLESS 动态 IP 池
+
+> **CFspider v1.8.2 采用 VLESS 协议**，每次请求自动获取新的出口 IP，自动从 300+ 全球节点中选择最优节点。**完全隐藏 Cloudflare 特征**（无 CF-Ray、CF-Worker、Cf-Connecting-Ip 等头），实现真正的匿名代理。
 
 ### 🎯 动态 IP 池的优势
 
@@ -179,40 +193,68 @@ Cloudflare Workers 免费版每日 100,000 请求，无需信用卡，无需付�
 
 ## 技术架构
 
+### VLESS 代理架构 (v1.8.2+)
+
 ```
-+------------------+      +----------------------+      +------------------+
-|                  |      |   Cloudflare Edge    |      |                  |
-|   Your Python    | ---> |   Workers (300+)     | ---> |   Target Website |
-|   Application    |      |   Global Nodes       |      |                  |
-|                  |      +----------------------+      +------------------+
-+------------------+              |
-        |                         v
-        v                 +----------------------+
-+------------------+      |  Cloudflare IP Pool  |
-|   cfspider lib   |      |  172.64.x.x          |
-|   requests-like  |      |  104.21.x.x          |
-+------------------+      |  162.159.x.x  ...    |
++------------------+                              +------------------+
+|                  |   WebSocket + VLESS          |                  |
+|   Your Python    | ─────────────────────────────|   Target Website |
+|   Application    |    (完全隐藏 CF 特征)         |                  |
+|                  |                              +------------------+
++------------------+                                      ▲
+        │                                                 │
+        │ wss://                                   HTTP/HTTPS
+        ▼                                                 │
++------------------+      +----------------------+        │
+|   cfspider lib   |      |   Cloudflare Edge    |────────┘
+|   LocalVlessProxy| ────▶|   Workers (300+)     |
++------------------+      |   VLESS Protocol     |
+                          +----------------------+
+                                    │
+                                    ▼
+                          +----------------------+
+                          |  动态 IP 池 (每次新 IP) |
+                          |  172.64.x.x          |
+                          |  104.21.x.x          |
+                          |  162.159.x.x  ...    |
                           +----------------------+
 ```
 
-**工作流程：**
+**VLESS 工作流程：**
 1. 你的应用调用 `cfspider.get(url, cf_proxies="https://your-workers.dev")`
-2. CFspider 通过 VLESS 协议连接到你的 Cloudflare Workers
-3. Workers 自动路由到离目标网站最近的边缘节点（动态 IP 池）
+2. CFspider 本地启动 VLESS 代理，通过 WebSocket 连接到 Workers
+3. Workers 使用 VLESS 协议处理请求，自动路由到最近边缘节点
 4. 每次请求自动获取新的出口 IP（从 300+ 节点中选择）
-5. 响应返回，目标网站看到的是干净的请求（无 CF-Ray、CF-Worker 等头）
+5. 响应返回，**目标网站看到的是完全干净的请求**（无 CF-Ray、CF-Worker、Cf-Connecting-Ip 等头）
+
+**VLESS vs HTTP 代理对比：**
+
+| 对比项 | 旧方案 (HTTP 代理) | 新方案 (VLESS v1.8.2+) |
+|--------|-------------------|------------------------|
+| CF 特征暴露 | ❌ 暴露 CF-Ray, CF-Worker 等 | ✅ 完全隐藏 |
+| IPv6 问题 | ❌ IPv6 固定不变 | ✅ 每次请求新 IP |
+| 匿名性 | ⚠️ 中等 | ✅ 高 |
+| 检测风险 | ⚠️ 容易被识别 | ✅ 难以检测 |
 
 ## 特性
 
+### 🔐 核心特性 (v1.8.2+)
+
+- **VLESS 协议代理**：通过 VLESS 协议连接 Workers，完全隐藏 Cloudflare 特征
 - **动态 IP 池**：每次请求自动获取新的出口 IP，从 300+ 全球节点自动选择
-- **完全隐藏 CF 特征**：使用 VLESS 协议，目标网站无法检测到 CF-Ray、CF-Worker 等 Cloudflare 头
+- **完全隐藏 CF 特征**：目标网站无法检测到 CF-Ray、CF-Worker、Cf-Connecting-Ip 等头
+- **UUID 安全机制**：支持自定义 UUID，配置后 API 不公开返回，需手动填写
+- **简化 API**：只需填写 Workers 地址，自动从 `/api/config` 获取配置
+
+### 📦 完整功能
+
 - 使用 Cloudflare 全球 300+ 边缘节点 IP
 - 与 requests 库语法一致，无学习成本
 - 支持 GET、POST、PUT、DELETE 等所有 HTTP 方法
 - 支持 Session 会话管理
 - 返回 Cloudflare 节点信息（cf_colo、cf_ray）
 - **支持浏览器模式**，可渲染 JavaScript 动态页面、截图、自动化操作
-- **支持多种代理方式**：HTTP 代理、SOCKS5 代理、VLESS 链接（支持直接填写完整链接）
+- **支持多种代理方式**：VLESS 链接、HTTP 代理、SOCKS5 代理
 - **支持异步请求**（基于 httpx），可使用 async/await 语法
 - **支持 HTTP/2 协议**，更快的连接复用和性能
 - **支持流式响应**，高效处理大文件下载
@@ -228,19 +270,22 @@ Cloudflare Workers 免费版每日 100,000 请求，无需信用卡，无需付�
 
 | 功能 | 状态 | 说明 |
 |------|------|------|
-| HTTP GET 请求 | OK | 返回 Cloudflare IP |
-| HTTP POST 请求 | OK | 发送数据成功 |
-| 自定义 Headers | OK | Header 正确传递 |
-| Session 会话 | OK | 多次请求正常 |
-| Workers Debug | OK | 返回 CF 机房信息 |
-| 浏览器(HTTP代理) | OK | 支持本地/远程代理 |
-| 浏览器(VLESS) | OK | Cloudflare IP 出口 |
-| 浏览器(无代理) | OK | 本地 IP 出口 |
-| IP 地图可视化 | OK | 生成 HTML 地图文件 |
-| 网页镜像 | OK | 保存完整网页到本地 |
-| 隐身模式 | OK | 自动添加 15+ 个请求头 |
-| StealthSession | OK | 会话一致性、自动 Referer |
-| 随机延迟 | OK | 请求间随机等待 |
+| **VLESS 动态 IP** | ✅ OK | 每次请求新 IP（IPv4 + IPv6） |
+| **CF 特征隐藏** | ✅ OK | 无 CF-Ray、CF-Worker 等头 |
+| **UUID 安全** | ✅ OK | 自定义 UUID 不公开返回 |
+| HTTP GET 请求 | ✅ OK | 返回 Cloudflare IP |
+| HTTP POST 请求 | ✅ OK | 发送数据成功 |
+| 自定义 Headers | ✅ OK | Header 正确传递 |
+| Session 会话 | ✅ OK | 多次请求正常 |
+| Workers Debug | ✅ OK | 返回 CF 机房信息 |
+| 浏览器(VLESS) | ✅ OK | Cloudflare IP 出口 |
+| 浏览器(HTTP代理) | ✅ OK | 支持本地/远程代理 |
+| 浏览器(无代理) | ✅ OK | 本地 IP 出口 |
+| IP 地图可视化 | ✅ OK | 生成 HTML 地图文件 |
+| 网页镜像 | ✅ OK | 保存完整网页到本地 |
+| 隐身模式 | ✅ OK | 自动添加 15+ 个请求头 |
+| StealthSession | ✅ OK | 会话一致性、自动 Referer |
+| 随机延迟 | ✅ OK | 请求间随机等待 |
 
 ## 部署 Workers
 
@@ -1117,7 +1162,7 @@ save_dir/
 
 ## 数据提取
 
-CFspider 1.8.0 新增了强大的数据提取功能，支持 CSS 选择器、XPath、JSONPath，让网页数据提取变得简单直观。
+CFspider 提供强大的数据提取功能，支持 CSS 选择器、XPath、JSONPath，让网页数据提取变得简单直观。
 
 ### 安装数据提取依赖（可选）
 
@@ -1314,7 +1359,7 @@ cfspider get/post <url> [options]
 选项:
   -H, --header HEADER     请求头 (如 "User-Agent: xxx")
   --proxy URL             Workers 代理地址
-  --token TOKEN           鉴权 token
+  --uuid UUID             VLESS UUID（自定义 UUID 时需要）
   --impersonate BROWSER   TLS 指纹模拟 (如 chrome131)
   --stealth               启用隐身模式
   --pick RULE             数据提取规则 (如 "title:h1")
@@ -1497,12 +1542,29 @@ except Exception as e:
 
 | 方法 | 接口 | 说明 |
 |------|------|------|
+| GET | /api/config | 获取 Workers 配置（uuid、host、new_ip 等） |
 | GET | /api/fetch?url=... | 代理请求目标 URL，返回原始内容 |
 | GET | /api/json?url=... | 代理请求目标 URL，返回 JSON（含节点信息） |
 | GET | /api/pool | 获取当前节点的 IP 池状态信息 |
 | GET | /api/proxyip | 获取当前使用的 Proxy IP 和节点代码 |
 | POST | /proxy?url=...&method=... | Python 客户端使用的代理接口 |
 | GET | /debug | 调试接口，返回当前请求的详细信息 |
+| WS | /{uuid} | VLESS WebSocket 连接端点 |
+
+**`/api/config` 响应示例：**
+
+```json
+{
+    "host": "your-workers.dev",
+    "vless_path": "/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+    "new_ip": true,
+    "version": "1.8.2",
+    "is_default_uuid": true,
+    "uuid": "cfspider-public"  // 仅默认 UUID 时返回
+}
+```
+
+> **注意：** 如果配置了自定义 UUID 环境变量，`/api/config` 不会返回 `uuid` 字段，需要在 Python 库中手动填写。
 
 ## FAQ 常见问题
 
@@ -1522,25 +1584,31 @@ Cloudflare IP 被数百万网站使用，信誉极高。但如果对单一网站
 Cloudflare CDN IP (如 172.64.x.x) 是 Anycast IP，仅用于边缘加速，不提供 HTTP 代理服务。必须通过 Workers 才能实现代理功能。
 
 ### 浏览器模式如何获得 CF IP？
-需要配合 edgetunnel 项目使用 VLESS 协议。edgetunnel 将流量通过 Cloudflare 网络转发，实现浏览器流量从 CF IP 出口。
+v1.8.2+ 已内置 VLESS 协议支持。只需填写 Workers 地址即可，CFspider 会自动通过 VLESS 协议将浏览器流量从 Cloudflare IP 出口。
+
+```python
+browser = cfspider.Browser(cf_proxies="https://your-workers.dev")
+```
 
 ## 注意事项
 
 1. Workers 免费版限制：每日 100,000 请求，单次 CPU 时间 10ms
 2. 请求体大小限制：免费版 100MB，付费版无限制
 3. 超时限制：免费版 30 秒，付费版无限制
-4. 不支持 WebSocket、gRPC 等非 HTTP 协议
+4. VLESS 协议使用 WebSocket 传输，已内置支持
 5. 浏览器模式需要额外安装 `playwright` 和 Chromium
-6. edgetunnel VLESS 代理需要单独部署 edgetunnel Workers
+6. **v1.8.2+**：VLESS 功能已集成到 `workers.js`，无需单独部署 edgetunnel
+7. 配置自定义 UUID 后，Python 库必须填写 `uuid` 参数
 
 ## 致谢
 
-本项目的浏览器 VLESS 代理功能借鉴并使用了 [edgetunnel](https://github.com/cmliu/edgetunnel) 项目。
+本项目的 VLESS 协议实现借鉴并集成了 [edgetunnel](https://github.com/cmliu/edgetunnel) 项目的核心功能。
 
 edgetunnel 是一个优秀的 Cloudflare Workers VLESS 代理实现，感谢 [@cmliu](https://github.com/cmliu) 的开源贡献。
 
-如需使用浏览器模式的 Cloudflare IP 出口功能，请先部署 edgetunnel Workers：
-- 仓库地址：https://github.com/cmliu/edgetunnel
+**v1.8.2 说明：** VLESS 功能已完全集成到 `workers.js` 中，无需单独部署 edgetunnel。只需部署本项目的 `workers.js` 即可同时获得 HTTP 代理接口和 VLESS 协议支持。
+
+- edgetunnel 仓库：https://github.com/cmliu/edgetunnel
 
 ## ⚖️ 法律声明与免责条款
 
