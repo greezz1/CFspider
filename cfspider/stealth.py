@@ -220,29 +220,38 @@ def update_sec_fetch_headers(headers: Dict, site_type: str = 'none') -> Dict:
 
 class StealthSession:
     """
-    隐身会话类
+    隐身会话类 / Stealth Session class
     
     提供完整的会话一致性管理，解决反爬虫检测的三大问题：
+    Provides complete session consistency management, solving three major anti-crawler issues:
     
     1. 固定 User-Agent：整个会话使用同一个浏览器指纹
+       Fixed User-Agent: Uses the same browser fingerprint throughout the session
     2. 自动管理 Cookie：响应中的 Cookie 自动保存并在后续请求中发送
+       Auto Cookie Management: Cookies from responses are saved and sent in subsequent requests
     3. 自动添加 Referer：页面跳转时自动添加来源信息
+       Auto Referer: Automatically adds origin information during page navigation
     4. 随机延迟：每次请求前随机等待，模拟人类行为
+       Random Delay: Random wait before each request, simulating human behavior
     5. 自动更新 Sec-Fetch-Site：根据 Referer 判断同站/跨站访问
+       Auto Sec-Fetch-Site: Updates based on Referer to indicate same-site/cross-site access
     
     Attributes:
-        browser (str): 当前使用的浏览器类型
-        cf_proxies (str): 代理地址
-        delay (tuple): 随机延迟范围
-        auto_referer (bool): 是否自动添加 Referer
-        last_url (str): 上一次请求的 URL
-        request_count (int): 会话累计请求次数
+        browser (str): 当前使用的浏览器类型 / Current browser type
+        cf_proxies (str): Workers 代理地址 / Workers proxy address
+        uuid (str): VLESS UUID（可选，自动获取） / VLESS UUID (optional, auto-fetched)
+        delay (tuple): 随机延迟范围 / Random delay range
+        auto_referer (bool): 是否自动添加 Referer / Whether to auto-add Referer
+        last_url (str): 上一次请求的 URL / Last requested URL
+        request_count (int): 会话累计请求次数 / Session cumulative request count
     
     Example:
         >>> import cfspider
         >>> 
-        >>> # 基本用法
-        >>> with cfspider.StealthSession(browser='chrome') as session:
+        >>> # 基本用法（使用 Workers 代理）
+        >>> with cfspider.StealthSession(
+        ...     cf_proxies="https://cfspider.violetqqcom.workers.dev"
+        ... ) as session:
         ...     # 第一次请求：Sec-Fetch-Site: none
         ...     r1 = session.get("https://example.com")
         ...     
@@ -251,14 +260,17 @@ class StealthSession:
         ...     r2 = session.get("https://example.com/page2")
         >>> 
         >>> # 带随机延迟
-        >>> with cfspider.StealthSession(delay=(1, 3)) as session:
+        >>> with cfspider.StealthSession(
+        ...     cf_proxies="https://cfspider.violetqqcom.workers.dev",
+        ...     delay=(1, 3)
+        ... ) as session:
         ...     for url in urls:
         ...         # 每次请求前随机等待 1-3 秒
         ...         response = session.get(url)
         >>> 
-        >>> # 结合代理使用
+        >>> # 完整配置
         >>> with cfspider.StealthSession(
-        ...     cf_proxies="https://your-workers.dev",
+        ...     cf_proxies="https://cfspider.violetqqcom.workers.dev",
         ...     browser='firefox',
         ...     delay=(0.5, 2.0)
         ... ) as session:
@@ -268,59 +280,63 @@ class StealthSession:
     
     Note:
         StealthSession 与普通 Session 的区别：
-        - Session: 仅保持代理配置和基本请求头
+        Differences between StealthSession and regular Session:
+        - Session: 仅保持代理配置和基本请求头 / Only maintains proxy config and basic headers
         - StealthSession: 完整的隐身模式，包括浏览器指纹、Cookie 管理、
                           自动 Referer、随机延迟、Sec-Fetch-* 更新
+                          Complete stealth mode including browser fingerprint, Cookie management,
+                          auto Referer, random delay, Sec-Fetch-* updates
     """
     
     def __init__(
         self,
         browser: str = 'chrome',
         cf_proxies: str = None,
-        cf_workers: bool = True,
+        uuid: str = None,
         delay: Tuple[float, float] = None,
         auto_referer: bool = True,
-        token: str = None,
         **kwargs
     ):
         """
-        初始化隐身会话
+        初始化隐身会话 / Initialize stealth session
         
         Args:
             browser (str): 浏览器类型，决定使用的 User-Agent 和请求头模板
-                - 'chrome': Chrome 131（推荐，最完整的请求头，15 个）
-                - 'firefox': Firefox 133（含 Sec-GPC 隐私头，12 个）
-                - 'safari': Safari 18（macOS 风格，5 个）
-                - 'edge': Edge 131（类似 Chrome，14 个）
-                - 'chrome_mobile': Chrome Mobile（Android，10 个）
-            cf_proxies (str, optional): 代理地址
-                - 不指定则直接请求目标 URL
-                - 指定 Workers 地址时配合 cf_workers=True
-                - 指定普通代理时配合 cf_workers=False
-            cf_workers (bool): 是否使用 CFspider Workers API（默认 True）
+                          / Browser type, determines User-Agent and header template
+                - 'chrome': Chrome 131（推荐，最完整的请求头，15 个）/ Recommended, 15 headers
+                - 'firefox': Firefox 133（含 Sec-GPC 隐私头，12 个）/ Includes privacy headers
+                - 'safari': Safari 18（macOS 风格，5 个）/ macOS style
+                - 'edge': Edge 131（类似 Chrome，14 个）/ Similar to Chrome
+                - 'chrome_mobile': Chrome Mobile（Android，10 个）/ Android mobile
+            cf_proxies (str, optional): Workers 代理地址
+                                       / Workers proxy address
+                - 如 "https://cfspider.violetqqcom.workers.dev"
+                - 不指定则直接请求目标 URL / If not specified, requests directly
+                - UUID 自动从 Workers 获取 / UUID auto-fetched from Workers
+            uuid (str, optional): VLESS UUID（可选，不填则自动获取）
+                                 / VLESS UUID (optional, auto-fetched if not provided)
             delay (tuple, optional): 请求间随机延迟范围（秒）
+                                    / Random delay range between requests (seconds)
                 - 如 (1, 3) 表示每次请求前随机等待 1-3 秒
-                - 第一次请求不会延迟
-                - 用于避免请求频率过高被检测
+                - e.g., (1, 3) means random wait 1-3 seconds before each request
+                - 第一次请求不会延迟 / First request won't be delayed
             auto_referer (bool): 是否自动添加 Referer（默认 True）
-                - True: 自动使用上一个 URL 作为 Referer
-                - False: 不自动添加（但可以手动指定）
-            **kwargs: 保留参数，用于未来扩展
+                                / Whether to auto-add Referer (default: True)
+            **kwargs: 保留参数，用于未来扩展 / Reserved for future extensions
         
         Example:
             >>> session = cfspider.StealthSession(
             ...     browser='chrome',
-            ...     cf_proxies='https://your-workers.dev',
+            ...     cf_proxies='https://cfspider.violetqqcom.workers.dev',
             ...     delay=(1, 3),
             ...     auto_referer=True
             ... )
         """
         self.browser = browser
         self.cf_proxies = cf_proxies
-        self.cf_workers = cf_workers
+        self.uuid = uuid
         self.delay = delay
         self.auto_referer = auto_referer
-        self.token = token
         self.last_url = None
         self.request_count = 0
         self._extra_kwargs = kwargs
@@ -361,21 +377,75 @@ class StealthSession:
             random_delay(self.delay[0], self.delay[1])
     
     def _update_cookies(self, response):
-        """更新 Cookie"""
+        """
+        从响应中更新 cookies
+        
+        支持两种方式：
+        1. 从 response.cookies 获取（直接请求时）
+        2. 从响应头 Set-Cookie 解析（通过 Workers 代理时）
+        """
+        # 方式1：从 response.cookies 获取
         if hasattr(response, 'cookies'):
-            for cookie in response.cookies:
-                self._cookies[cookie.name] = cookie.value
+            try:
+                for cookie in response.cookies:
+                    if hasattr(cookie, 'name') and hasattr(cookie, 'value'):
+                        self._cookies[cookie.name] = cookie.value
+            except TypeError:
+                if hasattr(response.cookies, 'items'):
+                    for name, value in response.cookies.items():
+                        self._cookies[name] = value
+        
+        # 方式2：从响应头 Set-Cookie 解析（Workers 代理时需要）
+        if hasattr(response, 'headers'):
+            self._parse_set_cookie_headers(response.headers)
+    
+    def _parse_set_cookie_headers(self, headers):
+        """从响应头中解析 Set-Cookie"""
+        set_cookie_headers = []
+        
+        if hasattr(headers, 'get_all'):
+            set_cookie_headers = headers.get_all('set-cookie') or []
+        elif hasattr(headers, 'getlist'):
+            set_cookie_headers = headers.getlist('set-cookie') or []
+        else:
+            cookie_header = headers.get('set-cookie', '')
+            if cookie_header:
+                import re
+                parts = re.split(r',\s*(?=[A-Za-z_][A-Za-z0-9_-]*=)', cookie_header)
+                set_cookie_headers = [p.strip() for p in parts if p.strip()]
+        
+        for cookie_str in set_cookie_headers:
+            self._parse_single_cookie(cookie_str)
+    
+    def _parse_single_cookie(self, cookie_str):
+        """解析单个 Set-Cookie 字符串"""
+        if not cookie_str:
+            return
+        parts = cookie_str.split(';')
+        if not parts:
+            return
+        first_part = parts[0].strip()
+        if '=' not in first_part:
+            return
+        name, value = first_part.split('=', 1)
+        name = name.strip()
+        value = value.strip()
+        if name:
+            self._cookies[name] = value
     
     def get(self, url: str, **kwargs) -> Any:
         """
-        发送 GET 请求
+        发送 GET 请求 / Send GET request
         
         Args:
-            url: 目标 URL
-            **kwargs: 其他参数
+            url (str): 目标 URL / Target URL
+            **kwargs: 其他参数 / Other parameters
+                - impersonate (str): TLS 指纹模拟 / TLS fingerprint impersonation
+                - http2 (bool): 启用 HTTP/2 / Enable HTTP/2
+                - 其他参数与 requests 库兼容 / Compatible with requests library
         
         Returns:
-            响应对象
+            CFSpiderResponse: 响应对象 / Response object
         """
         from .api import get as _get
         
@@ -390,8 +460,7 @@ class StealthSession:
         response = _get(
             url,
             cf_proxies=self.cf_proxies,
-            cf_workers=self.cf_workers,
-            token=self.token,
+            uuid=self.uuid,
             headers=headers,
             cookies=cookies,
             **kwargs
@@ -404,7 +473,16 @@ class StealthSession:
         return response
     
     def post(self, url: str, **kwargs) -> Any:
-        """发送 POST 请求"""
+        """
+        发送 POST 请求 / Send POST request
+        
+        Args:
+            url (str): 目标 URL / Target URL
+            **kwargs: 其他参数 / Other parameters
+        
+        Returns:
+            CFSpiderResponse: 响应对象 / Response object
+        """
         from .api import post as _post
         
         self._apply_delay()
@@ -421,8 +499,7 @@ class StealthSession:
         response = _post(
             url,
             cf_proxies=self.cf_proxies,
-            cf_workers=self.cf_workers,
-            token=self.token,
+            uuid=self.uuid,
             headers=headers,
             cookies=cookies,
             **kwargs
@@ -435,7 +512,7 @@ class StealthSession:
         return response
     
     def put(self, url: str, **kwargs) -> Any:
-        """发送 PUT 请求"""
+        """发送 PUT 请求 / Send PUT request"""
         from .api import put as _put
         
         self._apply_delay()
@@ -445,8 +522,7 @@ class StealthSession:
         response = _put(
             url,
             cf_proxies=self.cf_proxies,
-            cf_workers=self.cf_workers,
-            token=self.token,
+            uuid=self.uuid,
             headers=headers,
             cookies=cookies,
             **kwargs
@@ -457,7 +533,7 @@ class StealthSession:
         return response
     
     def delete(self, url: str, **kwargs) -> Any:
-        """发送 DELETE 请求"""
+        """发送 DELETE 请求 / Send DELETE request"""
         from .api import delete as _delete
         
         self._apply_delay()
@@ -467,8 +543,7 @@ class StealthSession:
         response = _delete(
             url,
             cf_proxies=self.cf_proxies,
-            cf_workers=self.cf_workers,
-            token=self.token,
+            uuid=self.uuid,
             headers=headers,
             cookies=cookies,
             **kwargs
@@ -479,7 +554,7 @@ class StealthSession:
         return response
     
     def head(self, url: str, **kwargs) -> Any:
-        """发送 HEAD 请求"""
+        """发送 HEAD 请求 / Send HEAD request"""
         from .api import head as _head
         
         self._apply_delay()
@@ -489,8 +564,7 @@ class StealthSession:
         response = _head(
             url,
             cf_proxies=self.cf_proxies,
-            cf_workers=self.cf_workers,
-            token=self.token,
+            uuid=self.uuid,
             headers=headers,
             cookies=cookies,
             **kwargs

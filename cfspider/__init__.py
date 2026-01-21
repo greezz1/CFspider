@@ -52,7 +52,7 @@ CFspider - Cloudflare 代理 IP 池 Python 库
 
 from .api import (
     get, post, put, delete, head, options, patch, request,
-    clear_map_records, get_map_collector
+    clear_map_records, get_map_collector, stop_vless_proxies
 )
 from .session import Session
 from .cli import install_browser
@@ -101,45 +101,50 @@ from .stealth import (
 
 
 # 延迟导入 Browser，避免强制依赖 playwright
-def Browser(cf_proxies=None, headless=True, timeout=30, vless_uuid=None):
+def Browser(cf_proxies=None, headless=True, timeout=30, uuid=None):
     """
-    创建浏览器实例
+    创建浏览器实例 / Create browser instance
+    
+    封装 Playwright，支持通过 Cloudflare Workers 代理浏览器流量。
+    Wraps Playwright with Cloudflare Workers proxy support.
     
     Args:
-        cf_proxies: 代理地址，支持以下格式：
-                    - VLESS 链接: "vless://uuid@host:port?path=/xxx#name"（推荐）
-                    - HTTP 代理: "http://ip:port" 或 "ip:port"
-                    - SOCKS5 代理: "socks5://ip:port"
-                    - edgetunnel 域名: "v2.example.com"（需配合 vless_uuid）
-                    如不指定，则直接使用本地网络
-        headless: 是否无头模式，默认 True
-        timeout: 请求超时时间（秒），默认 30
-        vless_uuid: VLESS UUID，仅当使用域名方式时需要指定
-                    如果使用完整 VLESS 链接，则无需此参数
+        cf_proxies (str, optional): 代理地址 / Proxy address
+            - CFspider Workers URL（推荐）: "https://cfspider.violetqqcom.workers.dev"
+              UUID 将自动从 Workers 获取 / UUID auto-fetched from Workers
+            - VLESS 链接: "vless://uuid@host:port?path=/xxx#name"
+            - HTTP 代理: "http://ip:port" 或 "ip:port"
+            - SOCKS5 代理: "socks5://ip:port"
+            不填则直接使用本地网络 / None for direct connection
+        headless (bool): 是否无头模式，默认 True / Headless mode (default: True)
+        timeout (int): 请求超时时间（秒），默认 30 / Timeout in seconds (default: 30)
+        uuid (str, optional): VLESS UUID（可选，不填则自动获取）
+                             / VLESS UUID (optional, auto-fetched)
         
     Returns:
-        Browser: 浏览器实例
+        Browser: 浏览器实例 / Browser instance
         
     Example:
         >>> import cfspider
-        >>> # 使用完整 VLESS 链接（推荐，无需 vless_uuid）
+        >>> 
+        >>> # 简化用法（推荐）：只需 Workers 地址，自动获取 UUID
         >>> browser = cfspider.Browser(
-        ...     cf_proxies="vless://uuid@v2.example.com:443?path=/"
+        ...     cf_proxies="https://cfspider.violetqqcom.workers.dev"
         ... )
         >>> html = browser.html("https://example.com")
         >>> browser.close()
         >>> 
-        >>> # 使用域名 + UUID（旧方式）
+        >>> # 手动指定 UUID
         >>> browser = cfspider.Browser(
-        ...     cf_proxies="v2.example.com",
-        ...     vless_uuid="your-vless-uuid"
+        ...     cf_proxies="https://cfspider.violetqqcom.workers.dev",
+        ...     uuid="c373c80c-58e4-4e64-8db5-40096905ec58"
         ... )
         >>> 
         >>> # 直接使用（无代理）
         >>> browser = cfspider.Browser()
     """
     from .browser import Browser as _Browser
-    return _Browser(cf_proxies, headless, timeout, vless_uuid)
+    return _Browser(cf_proxies, headless, timeout, uuid)
 
 
 def parse_vless_link(vless_link):
@@ -205,11 +210,11 @@ class PlaywrightNotInstalledError(CFSpiderError):
     pass
 
 
-__version__ = "1.8.0"
+__version__ = "1.8.2"
 __all__ = [
     # 同步 API (requests)
     "get", "post", "put", "delete", "head", "options", "patch", "request",
-    "Session", "Browser", "install_browser", "parse_vless_link",
+    "Session", "Browser", "install_browser", "parse_vless_link", "stop_vless_proxies",
     "CFSpiderError", "BrowserNotInstalledError", "PlaywrightNotInstalledError",
     # 异步 API (httpx)
     "aget", "apost", "aput", "adelete", "ahead", "aoptions", "apatch",

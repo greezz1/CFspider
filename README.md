@@ -4,7 +4,7 @@
 
 ## ⚡ 核心优势：动态 IP 池
 
-> **CFspider 是动态 IP 池**，每次请求可能使用不同的 Cloudflare IP，自动从 300+ 全球节点中选择最优节点。
+> **CFspider 是动态 IP 池**，每次请求自动获取新的出口 IP，自动从 300+ 全球节点中选择最优节点。完全隐藏 Cloudflare 特征（无 CF-Ray、CF-Worker 等头），实现真正的匿名代理。
 
 ### 🎯 动态 IP 池的优势
 
@@ -21,10 +21,10 @@
 # 静态 IP 代理：固定 IP，容易被封
 proxies = {"http": "1.2.3.4:8080"}  # 固定 IP
 
-# CFspider 动态 IP 池：每次请求可能不同
-response = cfspider.get("https://example.com", cf_proxies="your-workers.dev")
-print(response.cf_colo)  # 可能显示 NRT, SIN, LAX 等不同节点
-# 每次请求可能使用不同的 Cloudflare IP
+# CFspider 动态 IP 池：每次请求自动获取新 IP
+response = cfspider.get("https://example.com", cf_proxies="https://your-workers.dev")
+print(response.json()['origin'])  # 每次都是不同的出口 IP
+# 完全隐藏 CF 特征，目标网站无法检测到使用了 Cloudflare
 ```
 
 ## 📸 项目截图
@@ -196,15 +196,16 @@ Cloudflare Workers 免费版每日 100,000 请求，无需信用卡，无需付�
 ```
 
 **工作流程：**
-1. 你的应用调用 `cfspider.get(url, cf_proxies="workers.dev")`
-2. CFspider 发送请求到你的 Cloudflare Workers
+1. 你的应用调用 `cfspider.get(url, cf_proxies="https://your-workers.dev")`
+2. CFspider 通过 VLESS 协议连接到你的 Cloudflare Workers
 3. Workers 自动路由到离目标网站最近的边缘节点（动态 IP 池）
-4. 每次请求可能使用不同的 Cloudflare IP（从 300+ 节点中选择）
-5. 响应返回，目标网站看到的是 Cloudflare IP，而不是你的 IP
+4. 每次请求自动获取新的出口 IP（从 300+ 节点中选择）
+5. 响应返回，目标网站看到的是干净的请求（无 CF-Ray、CF-Worker 等头）
 
 ## 特性
 
-- **动态 IP 池**：每次请求可能使用不同的 Cloudflare IP，从 300+ 全球节点自动选择
+- **动态 IP 池**：每次请求自动获取新的出口 IP，从 300+ 全球节点自动选择
+- **完全隐藏 CF 特征**：使用 VLESS 协议，目标网站无法检测到 CF-Ray、CF-Worker 等 Cloudflare 头
 - 使用 Cloudflare 全球 300+ 边缘节点 IP
 - 与 requests 库语法一致，无学习成本
 - 支持 GET、POST、PUT、DELETE 等所有 HTTP 方法
@@ -263,39 +264,42 @@ Cloudflare Workers 免费版每日 100,000 请求，无需信用卡，无需付�
 
 如需自定义域名，可在 Worker → Settings → Triggers → Custom Domain 中添加。
 
-### Token 鉴权配置（可选）
+### UUID 配置（推荐）
 
-为了增强安全性，你可以为 Workers 配置 Token 鉴权：
+为了增强安全性，强烈建议配置自定义 UUID：
 
 1. 在 Worker → Settings → Variables and Secrets 中添加环境变量
-2. 变量名：`TOKEN`
-3. 变量值：你的 token（支持多个 token，用逗号分隔，如 `token1,token2,token3`）
+2. 变量名：`UUID`
+3. 变量值：你的 UUID（标准 UUID 格式，如 `xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx`）
 4. 保存并重新部署 Worker
 
-配置 Token 后，所有 API 请求（除了首页和 debug 页面）都需要提供有效的 token：
+**UUID 与 Python 库的关系：**
+
+| Workers 配置 | Python 库用法 |
+|-------------|--------------|
+| 未配置 `UUID` 环境变量（使用默认 UUID） | 不需要填写 `uuid` 参数，直接使用 `cfspider.get(url, cf_proxies="...")` |
+| 配置了自定义 `UUID` 环境变量 | **必须**填写 `uuid` 参数：`cfspider.get(url, cf_proxies="...", uuid="你的UUID")` |
+
+**示例：**
 
 ```python
 import cfspider
 
-# 在请求时传递 token
+# 如果 Workers 使用默认 UUID（未配置环境变量）
+response = cfspider.get("https://httpbin.org/ip", cf_proxies="https://your-workers.dev")
+
+# 如果 Workers 配置了自定义 UUID 环境变量
 response = cfspider.get(
     "https://httpbin.org/ip",
     cf_proxies="https://your-workers.dev",
-    token="your-token"  # 从查询参数传递
+    uuid="xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx"  # 必须填写配置的 UUID
 )
-
-# 或在 Session 中设置 token
-with cfspider.Session(
-    cf_proxies="https://your-workers.dev",
-    token="your-token"
-) as session:
-    response = session.get("https://httpbin.org/ip")
 ```
 
 **注意：**
-- 如果不配置 `TOKEN` 环境变量，则所有请求都可以访问（无鉴权）
-- Token 可以通过查询参数 `?token=xxx` 或 Header `Authorization: Bearer xxx` 传递
-- 支持配置多个 token，用逗号分隔
+- 如果不配置 `UUID` 环境变量，Workers 会使用默认 UUID，界面会显示安全警告
+- 强烈建议在生产环境中配置自定义 UUID
+- 配置自定义 UUID 后，Python 库请求时必须提供相同的 UUID，否则无法连接
 
 ## 安装
 
@@ -360,11 +364,13 @@ cfspider install
 ```python
 import cfspider
 
-cf_proxies = "https://your-workers.dev"
-
-response = cfspider.get("https://httpbin.org/ip", cf_proxies=cf_proxies)
-print(response.text)
-# {"origin": "2a06:98c0:3600::103, 172.71.24.151"}  # Cloudflare IP
+# 只需填写 Workers 地址，每次请求自动获取新 IP
+for i in range(5):
+    response = cfspider.get(
+        "https://httpbin.org/ip",
+        cf_proxies="https://your-workers.dev"
+    )
+    print(response.json()['origin'])  # 每次都是不同的 IP
 ```
 
 ### 浏览器模式
@@ -372,24 +378,15 @@ print(response.text)
 ```python
 import cfspider
 
-# 使用本地 HTTP 代理
-browser = cfspider.Browser(cf_proxies="127.0.0.1:9674")
+# 简化用法：只需 Workers 地址（自动获取 UUID）
+browser = cfspider.Browser(cf_proxies="https://your-workers.dev")
 html = browser.html("https://httpbin.org/ip")
-print(html)
+print(html)  # 返回动态 IP
 browser.close()
 
-# 使用 VLESS 链接（推荐，无需填写 UUID）
+# 使用 VLESS 链接
 browser = cfspider.Browser(
     cf_proxies="vless://your-uuid@v2.example.com:443?path=/"
-)
-html = browser.html("https://httpbin.org/ip")
-print(html)  # 返回 Cloudflare IP
-browser.close()
-
-# 使用 edgetunnel 域名 + UUID（旧方式）
-browser = cfspider.Browser(
-    cf_proxies="v2.example.com",
-    vless_uuid="your-vless-uuid"
 )
 html = browser.html("https://httpbin.org/ip")
 browser.close()
@@ -763,13 +760,13 @@ with cfspider.StealthSession(
 ```python
 import cfspider
 
-# 隐身模式 + Cloudflare IP 出口
+# 隐身模式 + 动态 IP（每次请求自动获取新 IP）
 response = cfspider.get(
     "https://httpbin.org/headers",
     cf_proxies="https://your-workers.dev",
     stealth=True
 )
-print(response.cf_colo)  # Cloudflare 节点代码
+print(response.json())  # 完整的浏览器请求头
 
 # 隐身会话 + Workers 代理
 with cfspider.StealthSession(
@@ -777,7 +774,7 @@ with cfspider.StealthSession(
     browser='chrome'
 ) as session:
     r1 = session.get("https://example.com")
-    r2 = session.get("https://example.com/api")
+    r2 = session.get("https://example.com/api")  # 自动携带 Cookie 和 Referer
 ```
 
 ### 配合 TLS 指纹模拟
@@ -1354,25 +1351,19 @@ cfspider install
 ```python
 import cfspider
 
-# 1. HTTP 代理（IP:PORT 格式）
-browser = cfspider.Browser(cf_proxies="127.0.0.1:9674")
+# 1. CFspider Workers（推荐，自动获取 UUID）
+browser = cfspider.Browser(cf_proxies="https://your-workers.dev")
 
-# 2. HTTP 代理（完整格式）
-browser = cfspider.Browser(cf_proxies="http://127.0.0.1:9674")
-
-# 3. SOCKS5 代理
-browser = cfspider.Browser(cf_proxies="socks5://127.0.0.1:1080")
-
-# 4. VLESS 链接（推荐，无需填写 UUID）
+# 2. VLESS 链接
 browser = cfspider.Browser(cf_proxies="vless://uuid@v2.example.com:443?path=/")
 
-# 5. edgetunnel 域名 + UUID（旧方式）
-browser = cfspider.Browser(
-    cf_proxies="v2.example.com",
-    vless_uuid="your-vless-uuid"
-)
+# 3. HTTP 代理
+browser = cfspider.Browser(cf_proxies="http://127.0.0.1:9674")
 
-# 6. 无代理
+# 4. SOCKS5 代理
+browser = cfspider.Browser(cf_proxies="socks5://127.0.0.1:1080")
+
+# 5. 无代理
 browser = cfspider.Browser()
 ```
 

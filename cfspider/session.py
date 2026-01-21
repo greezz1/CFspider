@@ -2,6 +2,7 @@
 CFspider Session 模块
 
 提供会话管理功能，在多个请求之间保持代理配置、请求头和 Cookie。
+简化 API：只需提供 Workers 地址即可自动获取 UUID 和配置。
 """
 
 from .api import request
@@ -17,26 +18,27 @@ class Session:
     Suitable for scenarios requiring login state or consecutive requests.
     
     Attributes:
-        cf_proxies (str): Workers 代理地址 / Workers proxy address
+        cf_proxies (str): Workers 代理地址（自动获取 UUID 配置）
+                         / Workers proxy address (auto-fetches UUID config)
+        uuid (str, optional): VLESS UUID（可选，不填则自动获取）
+                             / VLESS UUID (optional, auto-fetched if not provided)
         headers (dict): 会话级别的默认请求头 / Session-level default headers
         cookies (dict): 会话级别的 Cookie / Session-level cookies
-        token (str, optional): Workers API 鉴权 token / Workers API authentication token
     
     Example:
         >>> import cfspider
         >>> 
-        >>> # 创建会话 / Create session
-        >>> with cfspider.Session(cf_proxies="https://your-workers.dev", token="your-token") as session:
-        ...     # 设置会话级别的请求头 / Set session-level headers
-        ...     session.headers['Authorization'] = 'Bearer token'
-        ...     
-        ...     # 所有请求都会使用相同的代理和请求头
-        ...     # All requests use the same proxy and headers
-        ...     response1 = session.get("https://api.example.com/user")
-        ...     response2 = session.post("https://api.example.com/data", json={"key": "value"})
-        ...     
-        ...     # Cookie 会自动保持 / Cookies are automatically maintained
-        ...     print(session.cookies)
+        >>> # 简化用法：只需 Workers 地址（自动获取 UUID）
+        >>> with cfspider.Session(cf_proxies="https://cfspider.violetqqcom.workers.dev") as session:
+        ...     response = session.get("https://api.example.com/user")
+        ...     print(f"Cookies: {session.cookies}")
+        >>> 
+        >>> # 手动指定 UUID
+        >>> with cfspider.Session(
+        ...     cf_proxies="https://cfspider.violetqqcom.workers.dev",
+        ...     uuid="c373c80c-58e4-4e64-8db5-40096905ec58"
+        ... ) as session:
+        ...     response = session.get("https://httpbin.org/ip")
     
     Note:
         如果需要隐身模式的会话一致性（自动 Referer、随机延迟等），
@@ -45,39 +47,145 @@ class Session:
         please use cfspider.StealthSession.
     """
     
-    def __init__(self, cf_proxies=None, token=None):
+    def __init__(self, cf_proxies=None, uuid=None):
         """
         初始化会话 / Initialize session
         
         Args:
             cf_proxies (str): Workers 代理地址（必填）
                             / Workers proxy address (required)
-                例如："https://your-workers.dev"
-                e.g., "https://your-workers.dev"
-            token (str, optional): Workers API 鉴权 token
-                                  / Workers API authentication token
-                当 Workers 端配置了 TOKEN 环境变量时，必须提供有效的 token
-                Required when Workers has TOKEN environment variable configured
+                例如："https://cfspider.violetqqcom.workers.dev"
+                e.g., "https://cfspider.violetqqcom.workers.dev"
+                UUID 将自动从 Workers 获取
+                UUID will be auto-fetched from Workers
+            uuid (str, optional): VLESS UUID（可选）
+                如果不填写，会自动从 Workers 首页获取
+                If not provided, will be auto-fetched from Workers homepage
         
         Raises:
             ValueError: 当 cf_proxies 为空时
-                       / When cf_proxies is empty
         
         Example:
-            >>> session = cfspider.Session(cf_proxies="https://your-workers.dev", token="your-token")
+            >>> # 简化用法（推荐）
+            >>> session = cfspider.Session(cf_proxies="https://cfspider.violetqqcom.workers.dev")
+            >>> 
+            >>> # 手动指定 UUID
+            >>> session = cfspider.Session(
+            ...     cf_proxies="https://cfspider.violetqqcom.workers.dev",
+            ...     uuid="c373c80c-58e4-4e64-8db5-40096905ec58"
+            ... )
         """
         if not cf_proxies:
             raise ValueError(
                 "cf_proxies 是必填参数。\n"
                 "请提供 CFspider Workers 地址，例如：\n"
-                "  session = cfspider.Session(cf_proxies='https://your-workers.dev')\n\n"
+                "  session = cfspider.Session(cf_proxies='https://cfspider.violetqqcom.workers.dev')\n\n"
+                "UUID 将自动从 Workers 获取，无需手动指定。\n"
                 "如果不需要代理，可以直接使用 cfspider.get() 等函数。\n"
                 "如果需要隐身模式会话，请使用 cfspider.StealthSession。"
             )
-        self.cf_proxies = cf_proxies.rstrip("/")
-        self.token = token
+        self.cf_proxies = cf_proxies.rstrip("/") if cf_proxies else None
+        self.uuid = uuid
         self.headers = {}
         self.cookies = {}
+        self._base_headers = {}  # 兼容 StealthSession API
+    
+    @property
+    def _cookies(self):
+        """兼容 StealthSession 的 _cookies 属性"""
+        return self.cookies
+    
+    @_cookies.setter
+    def _cookies(self, value):
+        """兼容 StealthSession 的 _cookies 属性"""
+        self.cookies = value
+    
+    def _update_cookies(self, response):
+        """
+        从响应中更新 cookies / Update cookies from response
+        
+        支持两种方式：
+        1. 从 response.cookies 获取（直接请求时）
+        2. 从响应头 Set-Cookie 解析（通过 Workers 代理时）
+        """
+        # 方式1：从 response.cookies 获取
+        if hasattr(response, 'cookies'):
+            try:
+                for cookie in response.cookies:
+                    if hasattr(cookie, 'name') and hasattr(cookie, 'value'):
+                        self.cookies[cookie.name] = cookie.value
+                    elif isinstance(cookie, str):
+                        if '=' in cookie:
+                            name, value = cookie.split('=', 1)
+                            self.cookies[name.strip()] = value.strip()
+            except TypeError:
+                if hasattr(response.cookies, 'items'):
+                    for name, value in response.cookies.items():
+                        self.cookies[name] = value
+        
+        # 方式2：从响应头 Set-Cookie 解析（Workers 代理时需要）
+        if hasattr(response, 'headers'):
+            self._parse_set_cookie_headers(response.headers)
+    
+    def _parse_set_cookie_headers(self, headers):
+        """
+        从响应头中解析 Set-Cookie
+        
+        Workers 代理会原样返回目标网站的 Set-Cookie 头，
+        但 requests 库不会自动解析成 cookies，需要手动处理。
+        """
+        # 获取所有 Set-Cookie 头
+        set_cookie_headers = []
+        
+        # 尝试多种方式获取所有 Set-Cookie 头
+        if hasattr(headers, 'get_all'):
+            # httpx 风格
+            set_cookie_headers = headers.get_all('set-cookie') or []
+        elif hasattr(headers, 'getlist'):
+            # urllib3 风格
+            set_cookie_headers = headers.getlist('set-cookie') or []
+        else:
+            # requests 风格 - headers 可能合并了多个 Set-Cookie
+            # 用逗号分隔多个 cookie（但需要小心 Expires 中的逗号）
+            cookie_header = headers.get('set-cookie', '')
+            if cookie_header:
+                # 简单分割，按照 ", " 后跟字母开头的模式
+                # 例如: "a=1; Path=/, b=2; Path=/" 
+                import re
+                # 匹配 ", " 后面紧跟 cookie 名称的模式
+                parts = re.split(r',\s*(?=[A-Za-z_][A-Za-z0-9_-]*=)', cookie_header)
+                set_cookie_headers = [p.strip() for p in parts if p.strip()]
+        
+        # 解析每个 Set-Cookie 头
+        for cookie_str in set_cookie_headers:
+            self._parse_single_cookie(cookie_str)
+    
+    def _parse_single_cookie(self, cookie_str):
+        """
+        解析单个 Set-Cookie 字符串
+        
+        格式示例：
+        __Host-authjs.csrf-token=xxx%7Cyyy; Path=/; Secure; HttpOnly
+        """
+        if not cookie_str:
+            return
+        
+        # 分割成多个部分
+        parts = cookie_str.split(';')
+        if not parts:
+            return
+        
+        # 第一部分是 name=value
+        first_part = parts[0].strip()
+        if '=' not in first_part:
+            return
+        
+        name, value = first_part.split('=', 1)
+        name = name.strip()
+        value = value.strip()
+        
+        if name:
+            self.cookies[name] = value
     
     def request(self, method, url, **kwargs):
         """
@@ -94,6 +202,9 @@ class Session:
                 - data (dict/str): 表单数据 / Form data
                 - json (dict): JSON 数据 / JSON data
                 - timeout (int/float): 超时时间（秒） / Timeout (seconds)
+                - stealth (bool): 启用隐身模式 / Enable stealth mode
+                - impersonate (str): TLS 指纹模拟 / TLS fingerprint impersonation
+                - http2 (bool): 启用 HTTP/2 / Enable HTTP/2
                 - 其他参数与 requests 库兼容
                 - Other parameters compatible with requests library
         
@@ -105,22 +216,30 @@ class Session:
             Session-level headers and cookies are automatically added to requests,
             但请求级别的参数优先级更高。
             but request-level parameters have higher priority.
+            响应中的 Set-Cookie 会自动保存到会话中。
+            Set-Cookie from response will be automatically saved to session.
         """
         headers = self.headers.copy()
+        headers.update(self._base_headers)  # 应用基础请求头
         headers.update(kwargs.pop("headers", {}))
         
         cookies = self.cookies.copy()
         cookies.update(kwargs.pop("cookies", {}))
         
-        return request(
+        response = request(
             method,
             url,
             cf_proxies=self.cf_proxies,
-            token=self.token,
+            uuid=self.uuid,
             headers=headers,
             cookies=cookies,
             **kwargs
         )
+        
+        # 自动从响应中更新 cookies
+        self._update_cookies(response)
+        
+        return response
     
     def get(self, url, **kwargs):
         """

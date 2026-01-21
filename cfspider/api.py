@@ -2,7 +2,7 @@
 CFspider 核心 API 模块
 
 提供同步 HTTP 请求功能，支持：
-- 通过 Cloudflare Workers 代理请求
+- 通过 Cloudflare Workers VLESS 代理请求
 - TLS 指纹模拟 (curl_cffi)
 - HTTP/2 支持 (httpx)
 - 隐身模式（完整浏览器请求头）
@@ -11,7 +11,7 @@ CFspider 核心 API 模块
 
 import requests
 import time
-from urllib.parse import urlencode, quote
+from urllib.parse import urlencode, quote, urlparse
 from typing import Optional, Any
 
 # 延迟导入 IP 地图模块
@@ -78,10 +78,9 @@ class CFSpiderResponse:
         raise_for_status(): 当状态码非 2xx 时抛出 HTTPError
     
     Example:
-        >>> response = cfspider.get("https://httpbin.org/ip", cf_proxies="...")
+        >>> response = cfspider.get("https://httpbin.org/ip", cf_proxies="...", uuid="...")
         >>> print(response.status_code)  # 200
         >>> print(response.cf_colo)      # NRT (东京节点)
-        >>> print(response.cf_ray)       # 8a1b2c3d4e5f-NRT
         >>> data = response.json()
         >>> print(data['origin'])        # Cloudflare IP
     """
@@ -380,62 +379,45 @@ class CFSpiderResponse:
         return save_response(self.content, filepath, encoding=encoding)
 
 
-def request(method, url, cf_proxies=None, cf_workers=True, http2=False, impersonate=None, 
+def request(method, url, cf_proxies=None, uuid=None, http2=False, impersonate=None, 
              map_output=False, map_file="cfspider_map.html", 
-             stealth=False, stealth_browser='chrome', delay=None, token=None, **kwargs):
+             stealth=False, stealth_browser='chrome', delay=None, **kwargs):
     """
     发送 HTTP 请求 / Send HTTP request
     
-    这是 CFspider 的核心函数，支持多种代理模式和反爬虫功能。
-    This is the core function of CFspider, supporting multiple proxy modes and anti-crawler features.
+    通过 CFspider Workers VLESS 代理发送请求，完全隐藏 Cloudflare 特征。
+    Send requests through CFspider Workers VLESS proxy, completely hiding Cloudflare signatures.
+    每次请求自动获取新的出口 IP。
+    Automatically gets a new exit IP for each request.
     
     Args:
         method (str): HTTP 方法（GET, POST, PUT, DELETE, HEAD, OPTIONS, PATCH）
                      / HTTP method (GET, POST, PUT, DELETE, HEAD, OPTIONS, PATCH)
         url (str): 目标 URL，必须包含协议（https://）
                   / Target URL (must include protocol, e.g., https://)
-        cf_proxies (str, optional): 代理地址，根据 cf_workers 参数有不同含义
-                                   / Proxy address, meaning depends on cf_workers parameter
-            - 当 cf_workers=True 时：填写 CFspider Workers 地址（如 "https://your-workers.dev"）
-            - When cf_workers=True: CFspider Workers address (e.g., "https://your-workers.dev")
-            - 当 cf_workers=False 时：填写普通 HTTP/SOCKS5 代理（如 "http://127.0.0.1:8080"）
-            - When cf_workers=False: Regular HTTP/SOCKS5 proxy (e.g., "http://127.0.0.1:8080")
+        cf_proxies (str, optional): CFspider Workers 地址
+                                   / CFspider Workers address
+            - 如 "https://cfspider.violetqqcom.workers.dev"
+            - e.g., "https://cfspider.violetqqcom.workers.dev"
             - 不填写时：直接请求目标 URL，不使用代理
             - None: Direct request without proxy
-        cf_workers (bool): 是否使用 CFspider Workers API（默认 True）
-                          / Whether to use CFspider Workers API (default: True)
-            - True: cf_proxies 是 Workers 地址，请求通过 Workers API 转发
-            - True: cf_proxies is Workers address, requests forwarded via Workers API
-            - False: cf_proxies 是普通代理，使用 requests/httpx 的 proxies 参数
-            - False: cf_proxies is regular proxy, uses requests/httpx proxies parameter
+        uuid (str, optional): VLESS UUID（可选，不填则自动获取）
+            - 不填写时会自动从 Workers 首页获取 UUID
+            - When not provided, UUID will be fetched from Workers homepage
         http2 (bool): 是否启用 HTTP/2 协议（默认 False）
                      / Whether to enable HTTP/2 protocol (default: False)
-            - True: 使用 httpx 客户端，支持 HTTP/2
-            - True: Uses httpx client with HTTP/2 support
-            - False: 使用 requests 库（默认行为）
-            - False: Uses requests library (default behavior)
-            - 注意：http2 和 impersonate 不能同时使用
-            - Note: http2 and impersonate cannot be used together
         impersonate (str, optional): TLS 指纹模拟，模拟真实浏览器的 TLS 握手特征
                                    / TLS fingerprint impersonation, mimics real browser TLS handshake
             - 可选值：chrome131, chrome124, safari18_0, firefox133, edge101 等
             - Options: chrome131, chrome124, safari18_0, firefox133, edge101, etc.
-            - 设置后自动使用 curl_cffi 发送请求
-            - Automatically uses curl_cffi when set
-            - 完整列表：cfspider.get_supported_browsers()
-            - Full list: cfspider.get_supported_browsers()
         map_output (bool): 是否生成 IP 地图 HTML 文件（默认 False）
                           / Whether to generate IP map HTML file (default: False)
-            - True: 请求完成后生成包含代理 IP 信息的交互式地图
-            - True: Generates interactive map with proxy IP information after request
         map_file (str): 地图输出文件名（默认 "cfspider_map.html"）
                        / Map output filename (default: "cfspider_map.html")
         stealth (bool): 是否启用隐身模式（默认 False）
                        / Whether to enable stealth mode (default: False)
             - True: 自动添加 15+ 个完整浏览器请求头，模拟真实浏览器访问
             - True: Automatically adds 15+ complete browser headers, mimics real browser
-            - 添加的请求头包括：User-Agent, Accept, Accept-Language, Sec-Fetch-*, Sec-CH-UA 等
-            - Headers include: User-Agent, Accept, Accept-Language, Sec-Fetch-*, Sec-CH-UA, etc.
         stealth_browser (str): 隐身模式使用的浏览器类型（默认 'chrome'）
                               / Stealth mode browser type (default: 'chrome')
             - 可选值：chrome, firefox, safari, edge, chrome_mobile
@@ -444,85 +426,61 @@ def request(method, url, cf_proxies=None, cf_workers=True, http2=False, imperson
                                 / Random delay range before request (seconds)
             - 如 (1, 3) 表示请求前随机等待 1-3 秒
             - e.g., (1, 3) means random wait 1-3 seconds before request
-            - 用于模拟人类行为，避免被反爬系统检测
-            - Used to simulate human behavior, avoid anti-crawler detection
-        token (str, optional): Workers API 鉴权 token
-                               / Workers API authentication token
-            - 当使用 Workers API（cf_workers=True）时，将 token 添加到查询参数
-            - When using Workers API (cf_workers=True), adds token to query parameters
-            - 如果 Workers 端配置了 TOKEN 环境变量，必须提供有效的 token
-            - Required when Workers has TOKEN environment variable configured
-            - 格式：从查询参数 ?token=xxx 传递
-            - Format: Passed via query parameter ?token=xxx
         **kwargs: 其他参数，与 requests 库完全兼容
                  / Other parameters, fully compatible with requests library
             - params (dict): URL 查询参数 / URL query parameters
-            - headers (dict): 自定义请求头（会与隐身模式头合并）
-                            / Custom headers (merged with stealth mode headers)
+            - headers (dict): 自定义请求头 / Custom headers
             - data (dict/str): 表单数据 / Form data
-            - json (dict): JSON 数据（自动设置 Content-Type）
-                          / JSON data (Content-Type set automatically)
+            - json (dict): JSON 数据 / JSON data
             - cookies (dict): Cookie
-            - timeout (int/float): 超时时间（秒），默认 30
-                                  / Timeout (seconds), default: 30
-            - allow_redirects (bool): 是否跟随重定向，默认 True
-                                    / Whether to follow redirects, default: True
-            - verify (bool): 是否验证 SSL 证书，默认 True
-                           / Whether to verify SSL certificate, default: True
+            - timeout (int/float): 超时时间（秒），默认 30 / Timeout (seconds), default: 30
     
     Returns:
-        CFSpiderResponse: 响应对象，包含以下属性
-                         / Response object with the following attributes
+        CFSpiderResponse: 响应对象 / Response object
             - text: 响应文本 / Response text
             - content: 响应字节 / Response bytes
             - json(): 解析 JSON / Parse JSON
             - status_code: HTTP 状态码 / HTTP status code
             - headers: 响应头 / Response headers
-            - cf_colo: Cloudflare 节点代码（使用 Workers 时可用）
-                      / Cloudflare colo code (available when using Workers)
-            - cf_ray: Cloudflare Ray ID
-    
-    Raises:
-        ImportError: 当需要的可选依赖未安装时
-                    / When required optional dependencies are not installed
-            - http2=True 需要 httpx[http2] / http2=True requires httpx[http2]
-            - impersonate 需要 curl_cffi / impersonate requires curl_cffi
-        ValueError: 当 http2 和 impersonate 同时启用时
-                   / When http2 and impersonate are both enabled
-        requests.RequestException: 网络请求失败时
-                                   / When network request fails
     
     Examples:
         >>> import cfspider
         >>> 
-        >>> # 基本 GET 请求
+        >>> # 基本 GET 请求（无代理）
         >>> response = cfspider.get("https://httpbin.org/ip")
         >>> print(response.json())
         >>> 
-        >>> # 使用 Workers 代理
+        >>> # 使用 Workers VLESS 代理（自动获取 UUID，每次新 IP）
         >>> response = cfspider.get(
         ...     "https://httpbin.org/ip",
-        ...     cf_proxies="https://your-workers.dev"
+        ...     cf_proxies="https://cfspider.violetqqcom.workers.dev"
         ... )
-        >>> print(response.cf_colo)  # NRT, SIN, LAX 等
+        >>> print(response.json())  # 出口 IP
         >>> 
-        >>> # 隐身模式 + TLS 指纹
-        >>> response = cfspider.get(
-        ...     "https://example.com",
-        ...     stealth=True,
-        ...     impersonate="chrome131"
-        ... )
-    
-    Notes:
-        - http2 和 impersonate 使用不同的后端（httpx/curl_cffi），不能同时启用
-        - 隐身模式的请求头优先级：用户自定义 > stealth 默认头
-        - 使用 Workers 代理时，自定义请求头通过 X-CFSpider-Header-* 传递
+        >>> # 多次请求自动获取不同 IP
+        >>> for i in range(5):
+        ...     response = cfspider.get(
+        ...         "https://httpbin.org/ip",
+        ...         cf_proxies="https://cfspider.violetqqcom.workers.dev"
+        ...     )
+        ...     print(response.json()['origin'])  # 每次都是不同 IP
     """
     # 应用随机延迟
     if delay:
         from .stealth import random_delay
         random_delay(delay[0], delay[1])
     
+    # 如果指定了 cf_proxies，使用 VLESS 代理
+    if cf_proxies:
+        return _request_vless(
+            method, url, cf_proxies, uuid,
+            http2=http2, impersonate=impersonate,
+            map_output=map_output, map_file=map_file,
+            stealth=stealth, stealth_browser=stealth_browser,
+            **kwargs
+        )
+    
+    # 没有指定代理，直接请求
     params = kwargs.pop("params", None)
     headers = kwargs.pop("headers", {})
     
@@ -530,10 +488,10 @@ def request(method, url, cf_proxies=None, cf_workers=True, http2=False, imperson
     if stealth:
         from .stealth import get_stealth_headers
         stealth_headers = get_stealth_headers(stealth_browser)
-        # 用户自定义的 headers 优先级更高
         final_headers = stealth_headers.copy()
         final_headers.update(headers)
         headers = final_headers
+    
     data = kwargs.pop("data", None)
     json_data = kwargs.pop("json", None)
     cookies = kwargs.pop("cookies", None)
@@ -544,109 +502,54 @@ def request(method, url, cf_proxies=None, cf_workers=True, http2=False, imperson
     
     # 如果指定了 impersonate，使用 curl_cffi
     if impersonate:
-        response = _request_impersonate(
-            method, url, cf_proxies, cf_workers, impersonate,
-            params=params, headers=headers, data=data,
-            json_data=json_data, cookies=cookies, timeout=timeout,
-            token=token, **kwargs
+        curl_requests = _get_curl_cffi()
+        response = curl_requests.request(
+            method,
+            url,
+            params=params,
+            headers=headers,
+            data=data,
+            json=json_data,
+            cookies=cookies,
+            timeout=timeout,
+            impersonate=impersonate,
+            **kwargs
         )
-        _handle_map_output(response, url, start_time, map_output, map_file)
-        return response
+        resp = CFSpiderResponse(response)
+        _handle_map_output(resp, url, start_time, map_output, map_file)
+        return resp
     
     # 如果启用 HTTP/2，使用 httpx
     if http2:
-        response = _request_httpx(
-            method, url, cf_proxies, cf_workers,
-            params=params, headers=headers, data=data,
-            json_data=json_data, cookies=cookies, timeout=timeout,
-            token=token, **kwargs
-        )
-        _handle_map_output(response, url, start_time, map_output, map_file)
-        return response
+        httpx = _get_httpx()
+        with httpx.Client(http2=True, timeout=timeout) as client:
+            response = client.request(
+                method,
+                url,
+                params=params,
+                headers=headers,
+                data=data,
+                json=json_data,
+                cookies=cookies,
+                **kwargs
+            )
+            resp = CFSpiderResponse(response)
+            _handle_map_output(resp, url, start_time, map_output, map_file)
+            return resp
     
-    # 如果没有指定 cf_proxies，直接使用 requests
-    if not cf_proxies:
-        resp = requests.request(
-            method,
-            url,
-            params=params,
-            headers=headers,
-            data=data,
-            json=json_data,
-            cookies=cookies,
-            timeout=timeout,
-            **kwargs
-        )
-        response = CFSpiderResponse(resp)
-        _handle_map_output(response, url, start_time, map_output, map_file)
-        return response
-    
-    # cf_workers=False：使用普通代理
-    if not cf_workers:
-        # 处理代理格式
-        proxy_url = cf_proxies
-        if not proxy_url.startswith(('http://', 'https://', 'socks5://')):
-            proxy_url = f"http://{proxy_url}"
-        
-        proxies = {
-            "http": proxy_url,
-            "https": proxy_url
-        }
-        
-        resp = requests.request(
-            method,
-            url,
-            params=params,
-            headers=headers,
-            data=data,
-            json=json_data,
-            cookies=cookies,
-            timeout=timeout,
-            proxies=proxies,
-            **kwargs
-        )
-        response = CFSpiderResponse(resp)
-        _handle_map_output(response, url, start_time, map_output, map_file)
-        return response
-    
-    # cf_workers=True：使用 CFspider Workers API 代理
-    cf_proxies_url = cf_proxies.rstrip("/")
-    
-    # 确保有协议前缀
-    if not cf_proxies_url.startswith(('http://', 'https://')):
-        cf_proxies_url = f"https://{cf_proxies_url}"
-    
-    target_url = url
-    if params:
-        target_url = f"{url}?{urlencode(params)}"
-    
-    # 构建代理 URL，添加 token 参数（如果提供）
-    proxy_url = f"{cf_proxies_url}/proxy?url={quote(target_url, safe='')}&method={method.upper()}"
-    if token:
-        proxy_url += f"&token={quote(token, safe='')}"
-    
-    request_headers = {}
-    if headers:
-        for key, value in headers.items():
-            request_headers[f"X-CFSpider-Header-{key}"] = value
-    
-    if cookies:
-        cookie_str = "; ".join([f"{k}={v}" for k, v in cookies.items()])
-        request_headers["X-CFSpider-Header-Cookie"] = cookie_str
-    
-    resp = requests.post(
-        proxy_url,
-        headers=request_headers,
+    # 默认使用 requests
+    resp = requests.request(
+        method,
+        url,
+        params=params,
+        headers=headers,
         data=data,
         json=json_data,
+        cookies=cookies,
         timeout=timeout,
         **kwargs
     )
-    
-    cf_colo = resp.headers.get("X-CF-Colo")
-    cf_ray = resp.headers.get("CF-Ray")
-    
-    response = CFSpiderResponse(resp, cf_colo=cf_colo, cf_ray=cf_ray)
+    response = CFSpiderResponse(resp)
     _handle_map_output(response, url, start_time, map_output, map_file)
     return response
 
@@ -662,7 +565,7 @@ def _handle_map_output(response, url, start_time, map_output, map_file):
     # 收集 IP 记录
     ip_map.add_ip_record(
         url=url,
-        ip=None,  # 无法直接获取 IP，但有 cf_colo
+        ip=None,
         cf_colo=getattr(response, 'cf_colo', None),
         cf_ray=getattr(response, 'cf_ray', None),
         status_code=response.status_code,
@@ -673,14 +576,170 @@ def _handle_map_output(response, url, start_time, map_output, map_file):
     ip_map.generate_map_html(output_file=map_file)
 
 
-def _request_impersonate(method, url, cf_proxies, cf_workers, impersonate,
-                         params=None, headers=None, data=None, json_data=None,
-                         cookies=None, timeout=30, token=None, **kwargs):
-    """使用 curl_cffi 发送请求（支持 TLS 指纹模拟）"""
-    curl_requests = _get_curl_cffi()
+# VLESS 本地代理缓存
+_vless_proxy_cache = {}
+
+# Workers 配置缓存
+_workers_config_cache = {}
+
+
+def _get_workers_config(cf_proxies):
+    """
+    从 Workers 获取配置（UUID、new_ip 等）
     
-    # 如果没有指定 cf_proxies，直接请求
-    if not cf_proxies:
+    返回:
+        dict: {
+            'uuid': str,
+            'host': str,
+            'new_ip': bool,
+            ...
+        }
+    """
+    # 解析 Workers 地址
+    parsed = urlparse(cf_proxies)
+    if parsed.scheme:
+        host = parsed.netloc or parsed.path.split('/')[0]
+    else:
+        host = cf_proxies.split('/')[0]
+    
+    # 检查缓存
+    if host in _workers_config_cache:
+        return _workers_config_cache[host]
+    
+    # 尝试从 Workers API 获取配置
+    try:
+        workers_url = f"https://{host}"
+        resp = requests.get(f"{workers_url}/api/config", timeout=10)
+        if resp.status_code == 200:
+            config = resp.json()
+            config['host'] = host
+            _workers_config_cache[host] = config
+            return config
+    except:
+        pass
+    
+    # 尝试从 /api/uuid 获取（兼容旧版本）
+    try:
+        workers_url = f"https://{host}"
+        resp = requests.get(f"{workers_url}/api/uuid", timeout=10)
+        if resp.status_code == 200:
+            config = resp.json()
+            config['host'] = host
+            if 'new_ip' not in config:
+                config['new_ip'] = True  # 默认启用
+            _workers_config_cache[host] = config
+            return config
+    except:
+        pass
+    
+    # 如果获取失败，尝试从首页 HTML 解析 UUID
+    try:
+        workers_url = f"https://{host}"
+        resp = requests.get(workers_url, timeout=10)
+        if resp.status_code == 200:
+            import re
+            match = re.search(r'([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})', resp.text)
+            if match:
+                config = {
+                    'uuid': match.group(1).lower(),
+                    'host': host,
+                    'new_ip': True  # 默认启用
+                }
+                _workers_config_cache[host] = config
+                return config
+    except:
+        pass
+    
+    return None
+
+
+def _request_vless(method, url, cf_proxies, uuid=None,
+                   http2=False, impersonate=None,
+                   map_output=False, map_file="cfspider_map.html",
+                   stealth=False, stealth_browser='chrome', **kwargs):
+    """
+    使用 VLESS 协议发送请求
+    
+    通过 CFspider Workers 的 VLESS 协议代理请求，
+    完全隐藏 Cloudflare 特征（CF-Ray、CF-Worker 等头）。
+    每次请求自动获取新的出口 IP。
+    
+    Args:
+        method: HTTP 方法
+        url: 目标 URL
+        cf_proxies: Workers 地址
+        uuid: VLESS UUID（可选，不填则自动获取）
+        其他参数与 request() 相同
+    """
+    from .vless_client import LocalVlessProxy
+    import uuid as uuid_mod
+    
+    # 获取 Workers 配置
+    config = _get_workers_config(cf_proxies)
+    if not config:
+        raise ValueError(
+            f"无法从 {cf_proxies} 获取配置。\n"
+            "请确保 Workers 已正确部署。"
+        )
+    
+    # 解析配置
+    host = config.get('host')
+    is_default_uuid = config.get('is_default_uuid', True)
+    
+    # 如果用户提供了 uuid，使用用户的
+    # 如果用户没提供，尝试从 Workers 获取（仅默认 UUID 可获取）
+    if not uuid:
+        uuid = config.get('uuid')
+    
+    if not uuid:
+        # Workers 配置了自定义 UUID，需要用户手动填写
+        raise ValueError(
+            f"Workers 配置了自定义 UUID，需要手动指定 uuid 参数。\n"
+            "用法: cfspider.get(url, cf_proxies='...', uuid='你的UUID')\n"
+            "提示: UUID 可在 Workers 界面或 Cloudflare Dashboard 中查看。"
+        )
+    
+    # 构建 VLESS WebSocket URL: wss://host/uuid
+    vless_url = f"wss://{host}/{uuid}"
+    
+    # 每次请求创建新连接，确保获取新 IP
+    cache_key = f"{host}:{uuid}:{uuid_mod.uuid4()}"
+    
+    # 创建本地 VLESS 代理（不缓存，每次新连接）
+    proxy = LocalVlessProxy(vless_url, uuid)
+    port = proxy.start()
+    
+    # 构建本地代理 URL
+    local_proxy = f"http://127.0.0.1:{port}"
+    
+    # 记录请求开始时间
+    start_time = time.time()
+    
+    # 准备请求参数
+    params = kwargs.pop("params", None)
+    headers = kwargs.pop("headers", {})
+    
+    # 如果启用隐身模式，添加完整的浏览器请求头
+    if stealth:
+        from .stealth import get_stealth_headers
+        stealth_headers = get_stealth_headers(stealth_browser)
+        final_headers = stealth_headers.copy()
+        final_headers.update(headers)
+        headers = final_headers
+    
+    data = kwargs.pop("data", None)
+    json_data = kwargs.pop("json", None)
+    cookies = kwargs.pop("cookies", None)
+    timeout = kwargs.pop("timeout", 30)
+    
+    proxies = {
+        "http": local_proxy,
+        "https": local_proxy
+    }
+    
+    # 如果指定了 impersonate，使用 curl_cffi
+    if impersonate:
+        curl_requests = _get_curl_cffi()
         response = curl_requests.request(
             method,
             url,
@@ -691,456 +750,191 @@ def _request_impersonate(method, url, cf_proxies, cf_workers, impersonate,
             cookies=cookies,
             timeout=timeout,
             impersonate=impersonate,
+            proxies=proxies,
             **kwargs
         )
-        return CFSpiderResponse(response)
+        resp = CFSpiderResponse(response)
+        _handle_map_output(resp, url, start_time, map_output, map_file)
+        return resp
     
-    # cf_workers=False：使用普通代理
-    if not cf_workers:
-        proxy_url = cf_proxies
-        if not proxy_url.startswith(('http://', 'https://', 'socks5://')):
-            proxy_url = f"http://{proxy_url}"
-        
-        response = curl_requests.request(
-            method,
-            url,
-            params=params,
-            headers=headers,
-            data=data,
-            json=json_data,
-            cookies=cookies,
-            timeout=timeout,
-            impersonate=impersonate,
-            proxies={"http": proxy_url, "https": proxy_url},
-            **kwargs
-        )
-        return CFSpiderResponse(response)
+    # 如果启用 HTTP/2，使用 httpx
+    if http2:
+        httpx = _get_httpx()
+        with httpx.Client(http2=True, timeout=timeout, proxy=local_proxy) as client:
+            response = client.request(
+                method,
+                url,
+                params=params,
+                headers=headers,
+                data=data,
+                json=json_data,
+                cookies=cookies,
+                **kwargs
+            )
+            resp = CFSpiderResponse(response)
+            _handle_map_output(resp, url, start_time, map_output, map_file)
+            return resp
     
-    # cf_workers=True：使用 CFspider Workers API 代理
-    cf_proxies = cf_proxies.rstrip("/")
-    
-    if not cf_proxies.startswith(('http://', 'https://')):
-        cf_proxies = f"https://{cf_proxies}"
-    
-    target_url = url
-    if params:
-        target_url = f"{url}?{urlencode(params)}"
-    
-    proxy_url = f"{cf_proxies}/proxy?url={quote(target_url, safe='')}&method={method.upper()}"
-    if token:
-        proxy_url += f"&token={quote(token, safe='')}"
-    
-    request_headers = {}
-    if headers:
-        for key, value in headers.items():
-            request_headers[f"X-CFSpider-Header-{key}"] = value
-    
-    if cookies:
-        cookie_str = "; ".join([f"{k}={v}" for k, v in cookies.items()])
-        request_headers["X-CFSpider-Header-Cookie"] = cookie_str
-    
-    response = curl_requests.post(
-        proxy_url,
-        headers=request_headers,
+    # 默认使用 requests
+    resp = requests.request(
+        method,
+        url,
+        params=params,
+        headers=headers,
         data=data,
         json=json_data,
+        cookies=cookies,
         timeout=timeout,
-        impersonate=impersonate,
+        proxies=proxies,
         **kwargs
     )
-    
-    cf_colo = response.headers.get("X-CF-Colo")
-    cf_ray = response.headers.get("CF-Ray")
-    
-    return CFSpiderResponse(response, cf_colo=cf_colo, cf_ray=cf_ray)
+    response = CFSpiderResponse(resp)
+    _handle_map_output(response, url, start_time, map_output, map_file)
+    return response
 
 
-def _request_httpx(method, url, cf_proxies, cf_workers, params=None, headers=None,
-                   data=None, json_data=None, cookies=None, timeout=30, token=None, **kwargs):
-    """使用 httpx 发送请求（支持 HTTP/2）"""
-    httpx = _get_httpx()
+def stop_vless_proxies():
+    """
+    停止所有 VLESS 本地代理
     
-    # 如果没有指定 cf_proxies，直接请求
-    if not cf_proxies:
-        with httpx.Client(http2=True, timeout=timeout) as client:
-            response = client.request(
-                method,
-                url,
-                params=params,
-                headers=headers,
-                data=data,
-                json=json_data,
-                cookies=cookies,
-                **kwargs
-            )
-            return CFSpiderResponse(response)
+    在程序结束时调用，释放资源。
     
-    # cf_workers=False：使用普通代理
-    if not cf_workers:
-        proxy_url = cf_proxies
-        if not proxy_url.startswith(('http://', 'https://', 'socks5://')):
-            proxy_url = f"http://{proxy_url}"
-        
-        with httpx.Client(http2=True, timeout=timeout, proxy=proxy_url) as client:
-            response = client.request(
-                method,
-                url,
-                params=params,
-                headers=headers,
-                data=data,
-                json=json_data,
-                cookies=cookies,
-                **kwargs
-            )
-            return CFSpiderResponse(response)
-    
-    # cf_workers=True：使用 CFspider Workers API 代理
-    cf_proxies = cf_proxies.rstrip("/")
-    
-    if not cf_proxies.startswith(('http://', 'https://')):
-        cf_proxies = f"https://{cf_proxies}"
-    
-    target_url = url
-    if params:
-        target_url = f"{url}?{urlencode(params)}"
-    
-    proxy_url = f"{cf_proxies}/proxy?url={quote(target_url, safe='')}&method={method.upper()}"
-    if token:
-        proxy_url += f"&token={quote(token, safe='')}"
-    
-    request_headers = {}
-    if headers:
-        for key, value in headers.items():
-            request_headers[f"X-CFSpider-Header-{key}"] = value
-    
-    if cookies:
-        cookie_str = "; ".join([f"{k}={v}" for k, v in cookies.items()])
-        request_headers["X-CFSpider-Header-Cookie"] = cookie_str
-    
-    with httpx.Client(http2=True, timeout=timeout) as client:
-        response = client.post(
-            proxy_url,
-            headers=request_headers,
-            data=data,
-            json=json_data,
-            **kwargs
-        )
-    
-    cf_colo = response.headers.get("X-CF-Colo")
-    cf_ray = response.headers.get("CF-Ray")
-    
-    return CFSpiderResponse(response, cf_colo=cf_colo, cf_ray=cf_ray)
+    Example:
+        >>> import cfspider
+        >>> # 使用 VLESS 发送请求
+        >>> response = cfspider.get("https://httpbin.org/ip",
+        ...     cf_proxies="https://cfspider.violetqqcom.workers.dev",
+        ...     uuid="c373c80c-58e4-4e64-8db5-40096905ec58"
+        ... )
+        >>> # 程序结束时清理
+        >>> cfspider.stop_vless_proxies()
+    """
+    for key, proxy in list(_vless_proxy_cache.items()):
+        try:
+            proxy.stop()
+        except:
+            pass
+    _vless_proxy_cache.clear()
 
 
-def get(url, cf_proxies=None, cf_workers=True, http2=False, impersonate=None,
+def get(url, cf_proxies=None, uuid=None, http2=False, impersonate=None,
         map_output=False, map_file="cfspider_map.html",
-        stealth=False, stealth_browser='chrome', delay=None, token=None, **kwargs):
+        stealth=False, stealth_browser='chrome', delay=None, **kwargs):
     """
     发送 GET 请求 / Send GET request
     
+    每次请求自动获取新的出口 IP。
+    Automatically gets a new exit IP for each request.
+    
     Args:
         url (str): 目标 URL / Target URL (must include protocol, e.g., https://)
-        cf_proxies (str, optional): 代理地址 / Proxy address
-            - 当 cf_workers=True 时：CFspider Workers 地址（如 "https://your-workers.dev"）
-            - When cf_workers=True: CFspider Workers address (e.g., "https://your-workers.dev")
-            - 当 cf_workers=False 时：普通 HTTP/SOCKS5 代理（如 "http://127.0.0.1:8080"）
-            - When cf_workers=False: Regular HTTP/SOCKS5 proxy (e.g., "http://127.0.0.1:8080")
+        cf_proxies (str, optional): CFspider Workers 地址 / CFspider Workers address
+            - 如 "https://cfspider.violetqqcom.workers.dev"
             - 不填写时：直接请求，不使用代理 / None: Direct request without proxy
-        cf_workers (bool): 是否使用 CFspider Workers API（默认 True）
-                          / Whether to use CFspider Workers API (default: True)
+        uuid (str, optional): VLESS UUID（可选，不填则自动获取）
+            - 不填写会自动从 Workers 首页获取
+            - When not provided, UUID is auto-fetched from Workers
         http2 (bool): 是否启用 HTTP/2 协议（默认 False）
-                     / Whether to enable HTTP/2 protocol (default: False)
-        impersonate (str, optional): TLS 指纹模拟 / TLS fingerprint impersonation
+        impersonate (str, optional): TLS 指纹模拟
             - 可选值：chrome131, chrome124, safari18_0, firefox133, edge101 等
-            - Options: chrome131, chrome124, safari18_0, firefox133, edge101, etc.
-            - 设置后自动使用 curl_cffi 发送请求
-            - Automatically uses curl_cffi when set
         map_output (bool): 是否生成 IP 地图 HTML 文件（默认 False）
-                          / Whether to generate IP map HTML file (default: False)
         map_file (str): 地图输出文件名（默认 "cfspider_map.html"）
-                       / Map output filename (default: "cfspider_map.html")
         stealth (bool): 是否启用隐身模式（默认 False）
-                       / Whether to enable stealth mode (default: False)
-            - True: 自动添加 15+ 个完整浏览器请求头
-            - True: Automatically adds 15+ complete browser headers
         stealth_browser (str): 隐身模式浏览器类型（默认 'chrome'）
-                              / Stealth mode browser type (default: 'chrome')
-            - 可选值：chrome, firefox, safari, edge, chrome_mobile
-            - Options: chrome, firefox, safari, edge, chrome_mobile
         delay (tuple, optional): 请求前随机延迟范围（秒），如 (1, 3)
-                                / Random delay range before request (seconds), e.g., (1, 3)
-        token (str, optional): Workers API 鉴权 token
-                               / Workers API authentication token
-            - 当 Workers 配置了 TOKEN 环境变量时必填
-            - Required when Workers has TOKEN environment variable configured
         **kwargs: 其他参数，与 requests 库完全兼容
-                 / Other parameters, fully compatible with requests library
-            - params (dict): URL 查询参数 / URL query parameters
-            - headers (dict): 自定义请求头 / Custom headers
-            - data (dict/str): 表单数据 / Form data
-            - json (dict): JSON 数据 / JSON data
-            - cookies (dict): Cookie
-            - timeout (int/float): 超时时间（秒），默认 30 / Timeout (seconds), default: 30
     
     Returns:
-        CFSpiderResponse: 响应对象 / Response object
-            - text: 响应文本 / Response text
-            - content: 响应字节 / Response bytes
-            - json(): 解析 JSON / Parse JSON
-            - status_code: HTTP 状态码 / HTTP status code
-            - headers: 响应头 / Response headers
-            - cf_colo: Cloudflare 节点代码（使用 Workers 时可用）
-                      / Cloudflare colo code (available when using Workers)
-            - cf_ray: Cloudflare Ray ID
+        CFSpiderResponse: 响应对象
+    
+    Examples:
+        >>> import cfspider
+        >>> 
+        >>> # 使用 Workers 代理（自动获取 UUID，每次新 IP）
+        >>> response = cfspider.get(
+        ...     "https://httpbin.org/ip",
+        ...     cf_proxies="https://cfspider.violetqqcom.workers.dev"
+        ... )
+        >>> 
+        >>> # 多次请求自动获取不同 IP
+        >>> for i in range(5):
+        ...     response = cfspider.get(
+        ...         "https://httpbin.org/ip",
+        ...         cf_proxies="https://cfspider.violetqqcom.workers.dev"
+        ...     )
+        ...     print(response.json()['origin'])  # 每次都是不同 IP
     """
-    return request("GET", url, cf_proxies=cf_proxies, cf_workers=cf_workers, 
+    return request("GET", url, cf_proxies=cf_proxies, uuid=uuid, 
                    http2=http2, impersonate=impersonate,
                    map_output=map_output, map_file=map_file,
-                   stealth=stealth, stealth_browser=stealth_browser, delay=delay, token=token, **kwargs)
+                   stealth=stealth, stealth_browser=stealth_browser, delay=delay, 
+                   **kwargs)
 
 
-def post(url, cf_proxies=None, cf_workers=True, http2=False, impersonate=None,
+def post(url, cf_proxies=None, uuid=None, http2=False, impersonate=None,
          map_output=False, map_file="cfspider_map.html",
-         stealth=False, stealth_browser='chrome', delay=None, token=None, **kwargs):
-    """
-    发送 POST 请求 / Send POST request
-    
-    Args:
-        url (str): 目标 URL / Target URL (must include protocol, e.g., https://)
-        cf_proxies (str, optional): 代理地址 / Proxy address
-            - 当 cf_workers=True 时：CFspider Workers 地址（如 "https://your-workers.dev"）
-            - When cf_workers=True: CFspider Workers address (e.g., "https://your-workers.dev")
-            - 当 cf_workers=False 时：普通 HTTP/SOCKS5 代理（如 "http://127.0.0.1:8080"）
-            - When cf_workers=False: Regular HTTP/SOCKS5 proxy (e.g., "http://127.0.0.1:8080")
-            - 不填写时：直接请求，不使用代理 / None: Direct request without proxy
-        cf_workers (bool): 是否使用 CFspider Workers API（默认 True）
-                          / Whether to use CFspider Workers API (default: True)
-        http2 (bool): 是否启用 HTTP/2 协议（默认 False）
-                     / Whether to enable HTTP/2 protocol (default: False)
-        impersonate (str, optional): TLS 指纹模拟 / TLS fingerprint impersonation
-            - 可选值：chrome131, chrome124, safari18_0, firefox133, edge101 等
-            - Options: chrome131, chrome124, safari18_0, firefox133, edge101, etc.
-        map_output (bool): 是否生成 IP 地图 HTML 文件（默认 False）
-                          / Whether to generate IP map HTML file (default: False)
-        map_file (str): 地图输出文件名（默认 "cfspider_map.html"）
-                       / Map output filename (default: "cfspider_map.html")
-        stealth (bool): 是否启用隐身模式（默认 False）
-                       / Whether to enable stealth mode (default: False)
-        stealth_browser (str): 隐身模式浏览器类型（默认 'chrome'）
-                              / Stealth mode browser type (default: 'chrome')
-            - 可选值：chrome, firefox, safari, edge, chrome_mobile
-            - Options: chrome, firefox, safari, edge, chrome_mobile
-        delay (tuple, optional): 请求前随机延迟范围（秒），如 (1, 3)
-                                / Random delay range before request (seconds), e.g., (1, 3)
-        token (str, optional): Workers API 鉴权 token
-                               / Workers API authentication token
-            - 当 Workers 配置了 TOKEN 环境变量时必填
-            - Required when Workers has TOKEN environment variable configured
-        **kwargs: 其他参数，与 requests 库完全兼容
-                 / Other parameters, fully compatible with requests library
-            - data (dict/str): 表单数据 / Form data
-            - json (dict): JSON 数据 / JSON data
-            - headers (dict): 自定义请求头 / Custom headers
-            - cookies (dict): Cookie
-            - timeout (int/float): 超时时间（秒），默认 30 / Timeout (seconds), default: 30
-    
-    Returns:
-        CFSpiderResponse: 响应对象 / Response object
-    """
-    return request("POST", url, cf_proxies=cf_proxies, cf_workers=cf_workers,
+         stealth=False, stealth_browser='chrome', delay=None, **kwargs):
+    """发送 POST 请求 / Send POST request"""
+    return request("POST", url, cf_proxies=cf_proxies, uuid=uuid,
                    http2=http2, impersonate=impersonate,
                    map_output=map_output, map_file=map_file,
-                   stealth=stealth, stealth_browser=stealth_browser, delay=delay, token=token, **kwargs)
+                   stealth=stealth, stealth_browser=stealth_browser, delay=delay, 
+                   **kwargs)
 
 
-def put(url, cf_proxies=None, cf_workers=True, http2=False, impersonate=None,
+def put(url, cf_proxies=None, uuid=None, http2=False, impersonate=None,
         map_output=False, map_file="cfspider_map.html",
-        stealth=False, stealth_browser='chrome', delay=None, token=None, **kwargs):
-    """
-    发送 PUT 请求 / Send PUT request
-    
-    Args:
-        url (str): 目标 URL / Target URL
-        cf_proxies (str, optional): 代理地址 / Proxy address
-        cf_workers (bool): 是否使用 CFspider Workers API（默认 True）
-                          / Whether to use CFspider Workers API (default: True)
-        http2 (bool): 是否启用 HTTP/2 协议（默认 False）
-                     / Whether to enable HTTP/2 protocol (default: False)
-        impersonate (str, optional): TLS 指纹模拟 / TLS fingerprint impersonation
-        map_output (bool): 是否生成 IP 地图 HTML 文件（默认 False）
-                          / Whether to generate IP map HTML file (default: False)
-        map_file (str): 地图输出文件名（默认 "cfspider_map.html"）
-                       / Map output filename (default: "cfspider_map.html")
-        stealth (bool): 是否启用隐身模式（默认 False）
-                       / Whether to enable stealth mode (default: False)
-        stealth_browser (str): 隐身模式浏览器类型（默认 'chrome'）
-                              / Stealth mode browser type (default: 'chrome')
-        delay (tuple, optional): 请求前随机延迟范围（秒），如 (1, 3)
-                                / Random delay range before request (seconds), e.g., (1, 3)
-        token (str, optional): Workers API 鉴权 token
-                               / Workers API authentication token
-        **kwargs: 其他参数，与 requests 库完全兼容
-                 / Other parameters, fully compatible with requests library
-    
-    Returns:
-        CFSpiderResponse: 响应对象 / Response object
-    """
-    return request("PUT", url, cf_proxies=cf_proxies, cf_workers=cf_workers,
+        stealth=False, stealth_browser='chrome', delay=None, **kwargs):
+    """发送 PUT 请求 / Send PUT request"""
+    return request("PUT", url, cf_proxies=cf_proxies, uuid=uuid,
                    http2=http2, impersonate=impersonate,
                    map_output=map_output, map_file=map_file,
-                   stealth=stealth, stealth_browser=stealth_browser, delay=delay, token=token, **kwargs)
+                   stealth=stealth, stealth_browser=stealth_browser, delay=delay,
+                   **kwargs)
 
 
-def delete(url, cf_proxies=None, cf_workers=True, http2=False, impersonate=None,
+def delete(url, cf_proxies=None, uuid=None, http2=False, impersonate=None,
            map_output=False, map_file="cfspider_map.html",
-           stealth=False, stealth_browser='chrome', delay=None, token=None, **kwargs):
-    """
-    发送 DELETE 请求 / Send DELETE request
-    
-    Args:
-        url (str): 目标 URL / Target URL
-        cf_proxies (str, optional): 代理地址 / Proxy address
-        cf_workers (bool): 是否使用 CFspider Workers API（默认 True）
-                          / Whether to use CFspider Workers API (default: True)
-        http2 (bool): 是否启用 HTTP/2 协议（默认 False）
-                     / Whether to enable HTTP/2 protocol (default: False)
-        impersonate (str, optional): TLS 指纹模拟 / TLS fingerprint impersonation
-        map_output (bool): 是否生成 IP 地图 HTML 文件（默认 False）
-                          / Whether to generate IP map HTML file (default: False)
-        map_file (str): 地图输出文件名（默认 "cfspider_map.html"）
-                       / Map output filename (default: "cfspider_map.html")
-        stealth (bool): 是否启用隐身模式（默认 False）
-                       / Whether to enable stealth mode (default: False)
-        stealth_browser (str): 隐身模式浏览器类型（默认 'chrome'）
-                              / Stealth mode browser type (default: 'chrome')
-        delay (tuple, optional): 请求前随机延迟范围（秒），如 (1, 3)
-                                / Random delay range before request (seconds), e.g., (1, 3)
-        token (str, optional): Workers API 鉴权 token
-                               / Workers API authentication token
-        **kwargs: 其他参数，与 requests 库完全兼容
-                 / Other parameters, fully compatible with requests library
-    
-    Returns:
-        CFSpiderResponse: 响应对象 / Response object
-    """
-    return request("DELETE", url, cf_proxies=cf_proxies, cf_workers=cf_workers,
+           stealth=False, stealth_browser='chrome', delay=None, **kwargs):
+    """发送 DELETE 请求 / Send DELETE request"""
+    return request("DELETE", url, cf_proxies=cf_proxies, uuid=uuid,
                    http2=http2, impersonate=impersonate,
                    map_output=map_output, map_file=map_file,
-                   stealth=stealth, stealth_browser=stealth_browser, delay=delay, token=token, **kwargs)
+                   stealth=stealth, stealth_browser=stealth_browser, delay=delay,
+                   **kwargs)
 
 
-def head(url, cf_proxies=None, cf_workers=True, http2=False, impersonate=None,
+def head(url, cf_proxies=None, uuid=None, http2=False, impersonate=None,
          map_output=False, map_file="cfspider_map.html",
-         stealth=False, stealth_browser='chrome', delay=None, token=None, **kwargs):
-    """
-    发送 HEAD 请求 / Send HEAD request
-    
-    Args:
-        url (str): 目标 URL / Target URL
-        cf_proxies (str, optional): 代理地址 / Proxy address
-        cf_workers (bool): 是否使用 CFspider Workers API（默认 True）
-                          / Whether to use CFspider Workers API (default: True)
-        http2 (bool): 是否启用 HTTP/2 协议（默认 False）
-                     / Whether to enable HTTP/2 protocol (default: False)
-        impersonate (str, optional): TLS 指纹模拟 / TLS fingerprint impersonation
-        map_output (bool): 是否生成 IP 地图 HTML 文件（默认 False）
-                          / Whether to generate IP map HTML file (default: False)
-        map_file (str): 地图输出文件名（默认 "cfspider_map.html"）
-                       / Map output filename (default: "cfspider_map.html")
-        stealth (bool): 是否启用隐身模式（默认 False）
-                       / Whether to enable stealth mode (default: False)
-        stealth_browser (str): 隐身模式浏览器类型（默认 'chrome'）
-                              / Stealth mode browser type (default: 'chrome')
-        delay (tuple, optional): 请求前随机延迟范围（秒），如 (1, 3)
-                                / Random delay range before request (seconds), e.g., (1, 3)
-        token (str, optional): Workers API 鉴权 token
-                               / Workers API authentication token
-        **kwargs: 其他参数，与 requests 库完全兼容
-                 / Other parameters, fully compatible with requests library
-    
-    Returns:
-        CFSpiderResponse: 响应对象 / Response object
-    """
-    return request("HEAD", url, cf_proxies=cf_proxies, cf_workers=cf_workers,
+         stealth=False, stealth_browser='chrome', delay=None, **kwargs):
+    """发送 HEAD 请求 / Send HEAD request"""
+    return request("HEAD", url, cf_proxies=cf_proxies, uuid=uuid,
                    http2=http2, impersonate=impersonate,
                    map_output=map_output, map_file=map_file,
-                   stealth=stealth, stealth_browser=stealth_browser, delay=delay, token=token, **kwargs)
+                   stealth=stealth, stealth_browser=stealth_browser, delay=delay,
+                   **kwargs)
 
 
-def options(url, cf_proxies=None, cf_workers=True, http2=False, impersonate=None,
+def options(url, cf_proxies=None, uuid=None, http2=False, impersonate=None,
             map_output=False, map_file="cfspider_map.html",
-            stealth=False, stealth_browser='chrome', delay=None, token=None, **kwargs):
-    """
-    发送 OPTIONS 请求 / Send OPTIONS request
-    
-    Args:
-        url (str): 目标 URL / Target URL
-        cf_proxies (str, optional): 代理地址 / Proxy address
-        cf_workers (bool): 是否使用 CFspider Workers API（默认 True）
-                          / Whether to use CFspider Workers API (default: True)
-        http2 (bool): 是否启用 HTTP/2 协议（默认 False）
-                     / Whether to enable HTTP/2 protocol (default: False)
-        impersonate (str, optional): TLS 指纹模拟 / TLS fingerprint impersonation
-        map_output (bool): 是否生成 IP 地图 HTML 文件（默认 False）
-                          / Whether to generate IP map HTML file (default: False)
-        map_file (str): 地图输出文件名（默认 "cfspider_map.html"）
-                       / Map output filename (default: "cfspider_map.html")
-        stealth (bool): 是否启用隐身模式（默认 False）
-                       / Whether to enable stealth mode (default: False)
-        stealth_browser (str): 隐身模式浏览器类型（默认 'chrome'）
-                              / Stealth mode browser type (default: 'chrome')
-        delay (tuple, optional): 请求前随机延迟范围（秒），如 (1, 3)
-                                / Random delay range before request (seconds), e.g., (1, 3)
-        token (str, optional): Workers API 鉴权 token
-                               / Workers API authentication token
-        **kwargs: 其他参数，与 requests 库完全兼容
-                 / Other parameters, fully compatible with requests library
-    
-    Returns:
-        CFSpiderResponse: 响应对象 / Response object
-    """
-    return request("OPTIONS", url, cf_proxies=cf_proxies, cf_workers=cf_workers,
+            stealth=False, stealth_browser='chrome', delay=None, **kwargs):
+    """发送 OPTIONS 请求 / Send OPTIONS request"""
+    return request("OPTIONS", url, cf_proxies=cf_proxies, uuid=uuid,
                    http2=http2, impersonate=impersonate,
                    map_output=map_output, map_file=map_file,
-                   stealth=stealth, stealth_browser=stealth_browser, delay=delay, token=token, **kwargs)
+                   stealth=stealth, stealth_browser=stealth_browser, delay=delay,
+                   **kwargs)
 
 
-def patch(url, cf_proxies=None, cf_workers=True, http2=False, impersonate=None,
+def patch(url, cf_proxies=None, uuid=None, http2=False, impersonate=None,
           map_output=False, map_file="cfspider_map.html",
-          stealth=False, stealth_browser='chrome', delay=None, token=None, **kwargs):
-    """
-    发送 PATCH 请求 / Send PATCH request
-    
-    Args:
-        url (str): 目标 URL / Target URL
-        cf_proxies (str, optional): 代理地址 / Proxy address
-        cf_workers (bool): 是否使用 CFspider Workers API（默认 True）
-                          / Whether to use CFspider Workers API (default: True)
-        http2 (bool): 是否启用 HTTP/2 协议（默认 False）
-                     / Whether to enable HTTP/2 protocol (default: False)
-        impersonate (str, optional): TLS 指纹模拟 / TLS fingerprint impersonation
-        map_output (bool): 是否生成 IP 地图 HTML 文件（默认 False）
-                          / Whether to generate IP map HTML file (default: False)
-        map_file (str): 地图输出文件名（默认 "cfspider_map.html"）
-                       / Map output filename (default: "cfspider_map.html")
-        stealth (bool): 是否启用隐身模式（默认 False）
-                       / Whether to enable stealth mode (default: False)
-        stealth_browser (str): 隐身模式浏览器类型（默认 'chrome'）
-                              / Stealth mode browser type (default: 'chrome')
-        delay (tuple, optional): 请求前随机延迟范围（秒），如 (1, 3)
-                                / Random delay range before request (seconds), e.g., (1, 3)
-        token (str, optional): Workers API 鉴权 token
-                               / Workers API authentication token
-        **kwargs: 其他参数，与 requests 库完全兼容
-                 / Other parameters, fully compatible with requests library
-    
-    Returns:
-        CFSpiderResponse: 响应对象 / Response object
-    """
-    return request("PATCH", url, cf_proxies=cf_proxies, cf_workers=cf_workers,
+          stealth=False, stealth_browser='chrome', delay=None, **kwargs):
+    """发送 PATCH 请求 / Send PATCH request"""
+    return request("PATCH", url, cf_proxies=cf_proxies, uuid=uuid,
                    http2=http2, impersonate=impersonate,
                    map_output=map_output, map_file=map_file,
-                   stealth=stealth, stealth_browser=stealth_browser, delay=delay, token=token, **kwargs)
+                   stealth=stealth, stealth_browser=stealth_browser, delay=delay,
+                   **kwargs)
 
 
 def clear_map_records():

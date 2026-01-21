@@ -89,14 +89,16 @@ class PlaywrightNotInstalledError(Exception):
 
 class Browser:
     """
-    CFspider 浏览器类
+    CFspider 浏览器类 / CFspider Browser class
     
     封装 Playwright，支持通过 Cloudflare Workers (edgetunnel) 代理浏览器流量
+    Wraps Playwright with Cloudflare Workers (edgetunnel) proxy support
     
     Example:
         >>> import cfspider
-        >>> # 通过 edgetunnel Workers 代理
-        >>> browser = cfspider.Browser(cf_proxies="wss://v2.kami666.xyz")
+        >>> 
+        >>> # 简化用法：只需 Workers 地址（自动获取 UUID）
+        >>> browser = cfspider.Browser(cf_proxies="https://cfspider.violetqqcom.workers.dev")
         >>> html = browser.html("https://example.com")
         >>> browser.close()
         >>> 
@@ -106,34 +108,38 @@ class Browser:
         >>> browser.close()
     """
     
-    def __init__(self, cf_proxies=None, headless=True, timeout=30, vless_uuid=None):
+    def __init__(self, cf_proxies=None, headless=True, timeout=30, uuid=None):
         """
-        初始化浏览器
+        初始化浏览器 / Initialize browser
         
         Args:
-            cf_proxies: 代理地址（选填），支持以下格式：
-                        - VLESS 链接: "vless://uuid@host:port?path=/xxx#name"（推荐）
-                        - HTTP 代理: "http://ip:port" 或 "ip:port"
-                        - SOCKS5 代理: "socks5://ip:port"
-                        - edgetunnel 域名: "v2.example.com"（需配合 vless_uuid）
-                        不填则直接使用本地网络
-            headless: 是否无头模式，默认 True
-            timeout: 请求超时时间（秒），默认 30
-            vless_uuid: VLESS UUID（选填），使用域名方式时需要指定
-                        如果使用完整 VLESS 链接，则无需此参数
+            cf_proxies (str, optional): 代理地址 / Proxy address
+                - CFspider Workers URL（推荐）: "https://cfspider.violetqqcom.workers.dev"
+                  UUID 将自动从 Workers 获取 / UUID auto-fetched from Workers
+                - VLESS 链接: "vless://uuid@host:port?path=/xxx#name"
+                - HTTP 代理: "http://ip:port" 或 "ip:port"
+                - SOCKS5 代理: "socks5://ip:port"
+                不填则直接使用本地网络 / None for direct connection
+            headless (bool): 是否无头模式，默认 True / Headless mode (default: True)
+            timeout (int): 请求超时时间（秒），默认 30 / Timeout in seconds (default: 30)
+            uuid (str, optional): VLESS UUID（可选，不填则自动获取）
+                                 / VLESS UUID (optional, auto-fetched)
             
         Examples:
-            # 使用完整 VLESS 链接（推荐，无需填写 vless_uuid）
-            browser = Browser(cf_proxies="vless://uuid@v2.example.com:443?path=/")
-            
-            # 使用域名 + UUID（旧方式）
-            browser = Browser(cf_proxies="v2.example.com", vless_uuid="your-uuid")
-            
-            # 使用 HTTP 代理
-            browser = Browser(cf_proxies="127.0.0.1:8080")
-            
-            # 使用 SOCKS5 代理
-            browser = Browser(cf_proxies="socks5://127.0.0.1:1080")
+            >>> # 简化用法（推荐）
+            >>> browser = Browser(cf_proxies="https://cfspider.violetqqcom.workers.dev")
+            >>> 
+            >>> # 手动指定 UUID
+            >>> browser = Browser(
+            ...     cf_proxies="https://cfspider.violetqqcom.workers.dev",
+            ...     uuid="c373c80c-58e4-4e64-8db5-40096905ec58"
+            ... )
+            >>> 
+            >>> # 使用 VLESS 链接
+            >>> browser = Browser(cf_proxies="vless://uuid@v2.example.com:443?path=/")
+            >>> 
+            >>> # 使用 HTTP 代理
+            >>> browser = Browser(cf_proxies="127.0.0.1:8080")
         """
         if not PLAYWRIGHT_AVAILABLE:
             raise PlaywrightNotInstalledError(
@@ -158,20 +164,60 @@ class Browser:
                 proxy_url = f"http://127.0.0.1:{port}"
             # 2. HTTP/SOCKS5 代理格式
             elif cf_proxies.startswith('http://') or cf_proxies.startswith('https://') or cf_proxies.startswith('socks5://'):
-                proxy_url = cf_proxies
+                # 如果是 CFspider Workers URL，尝试获取 UUID
+                if 'workers.dev' in cf_proxies or not uuid:
+                    uuid = uuid or self._get_workers_uuid(cf_proxies)
+                if uuid:
+                    # 使用 VLESS 代理
+                    hostname = cf_proxies.replace('https://', '').replace('http://', '').split('/')[0]
+                    ws_url = f'wss://{hostname}/{uuid}'
+                    self._vless_proxy = LocalVlessProxy(ws_url, uuid)
+                    port = self._vless_proxy.start()
+                    proxy_url = f"http://127.0.0.1:{port}"
+                else:
+                    # 直接使用 HTTP 代理
+                    proxy_url = cf_proxies
             # 3. IP:PORT 格式
             elif ':' in cf_proxies and cf_proxies.replace('.', '').replace(':', '').isdigit():
                 proxy_url = f"http://{cf_proxies}"
-            # 4. 域名 + UUID（旧方式）
-            elif vless_uuid:
-                hostname = cf_proxies.replace('https://', '').replace('http://', '').replace('wss://', '').replace('ws://', '').split('/')[0]
-                ws_url = f'wss://{hostname}/{vless_uuid}'
-                self._vless_proxy = LocalVlessProxy(ws_url, vless_uuid)
-                port = self._vless_proxy.start()
-                proxy_url = f"http://127.0.0.1:{port}"
-            # 5. 默认当作 HTTP 代理
+            # 4. 域名方式（尝试自动获取 UUID）
             else:
-                proxy_url = f"http://{cf_proxies}"
+                hostname = cf_proxies.replace('wss://', '').replace('ws://', '').split('/')[0]
+                uuid = uuid or self._get_workers_uuid(f"https://{hostname}")
+                if uuid:
+                    ws_url = f'wss://{hostname}/{uuid}'
+                    self._vless_proxy = LocalVlessProxy(ws_url, uuid)
+                    port = self._vless_proxy.start()
+                    proxy_url = f"http://127.0.0.1:{port}"
+                else:
+                    proxy_url = f"http://{cf_proxies}"
+    
+    def _get_workers_uuid(self, workers_url):
+        """从 Workers 获取 UUID / Get UUID from Workers"""
+        import requests
+        import re
+        
+        try:
+            # 尝试从 /api/config 获取
+            config_url = f"{workers_url.rstrip('/')}/api/config"
+            resp = requests.get(config_url, timeout=10)
+            if resp.status_code == 200:
+                config = resp.json()
+                return config.get('uuid')
+        except:
+            pass
+        
+        try:
+            # 尝试从首页 HTML 解析
+            resp = requests.get(workers_url, timeout=10)
+            if resp.status_code == 200:
+                match = re.search(r'([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})', resp.text)
+                if match:
+                    return match.group(1).lower()
+        except:
+            pass
+        
+        return None
         
         # 启动 Playwright
         self._playwright = sync_playwright().start()
