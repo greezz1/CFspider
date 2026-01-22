@@ -67,6 +67,24 @@ vless://你的UUID@your-workers.dev:443?encryption=none&security=tls&type=ws&hos
 | **国内直连代理** | 无法连接海外代理服务器 | ❌ 连接失败 |
 | **使用双层代理** | 通过 CF Workers 中转 | ✅ 正常访问 |
 
+### 实测对比（国内网络环境）
+
+```
+本地 IP: xxx.xxx.xxx.xxx（中国大陆）
+
+[测试 1] 直接使用 HTTP 代理
+代理地址: proxy.example.com:3010
+结果: ❌ 连接失败 - 403 Forbidden（代理服务器拒绝国内 IP）
+
+[测试 2] 通过 CFspider 双层代理
+Workers: https://your-workers.dev
+第二层代理: proxy.example.com:3010
+结果: ✅ 成功
+代理出口 IP: xxx.xxx.xxx.xxx（日本）
+```
+
+**结论**：国内网络无法直连海外代理服务器，通过 CFspider Workers 中转后可正常使用。
+
 **双层代理 vs 默认模式：**
 
 | 对比项 | 默认模式 | 双层代理模式 |
