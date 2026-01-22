@@ -2368,7 +2368,8 @@ function generateCFspiderPage(request, url, visitorIP, userID, newIpEnabled = tr
             twoProxyDisabled: '未配置',
             twoProxyLink: '双层代理链接',
             twoProxyDesc: '流量路径: 本地 → Workers (VLESS) → 第二层代理 → 目标网站',
-            twoProxyEnvHint: '设置环境变量 TWO_PROXY 启用双层代理',
+            twoProxyEnvHint: '可选功能：如需指定出口 IP 地区或国内无法直连代理时使用',
+            twoProxyHowTo: '如需启用，请在 Cloudflare Dashboard 设置环境变量：',
             exitIp: '出口 IP'
         },
         en: {
@@ -2396,7 +2397,8 @@ function generateCFspiderPage(request, url, visitorIP, userID, newIpEnabled = tr
             twoProxyDisabled: 'Not Configured',
             twoProxyLink: 'Two-Proxy Link',
             twoProxyDesc: 'Traffic: Local → Workers (VLESS) → Second Proxy → Target',
-            twoProxyEnvHint: 'Set TWO_PROXY env variable to enable',
+            twoProxyEnvHint: 'Optional: Use when you need specific exit IP region or cannot connect proxy directly',
+            twoProxyHowTo: 'To enable, set environment variable in Cloudflare Dashboard:',
             exitIp: 'Exit IP'
         }
     };
@@ -2919,9 +2921,18 @@ function generateCFspiderPage(request, url, visitorIP, userID, newIpEnabled = tr
                 <div class="vless-link-text" id="twoProxyLinkText" style="font-size: 0.85rem; color: var(--accent-green); word-break: break-all; line-height: 1.8; padding: 12px; background: var(--bg-secondary); border-radius: 8px; user-select: all;">${twoProxyLink}</div>
             </div>
             ` : `
-            <div style="background: var(--bg-primary); border: 1px dashed var(--border-color); border-radius: 8px; padding: 20px; text-align: center;">
-                <div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 8px;">${t.twoProxyEnvHint}</div>
-                <div style="font-size: 0.8rem; color: var(--accent-cyan); font-family: 'JetBrains Mono', monospace;">TWO_PROXY=host:port:user:pass</div>
+            <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 8px; padding: 24px;">
+                <div style="display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px;">
+                    <span style="font-size: 1.5rem;">💡</span>
+                    <div>
+                        <div style="font-size: 0.95rem; color: var(--text-primary); margin-bottom: 6px;">${t.twoProxyEnvHint}</div>
+                        <div style="font-size: 0.85rem; color: var(--text-secondary);">${t.twoProxyHowTo}</div>
+                    </div>
+                </div>
+                <div style="background: var(--bg-secondary); border-radius: 6px; padding: 12px 16px; font-family: 'JetBrains Mono', monospace;">
+                    <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 6px;">Dashboard → Workers → Settings → Variables</div>
+                    <div style="font-size: 0.85rem; color: var(--accent-cyan);">TWO_PROXY = host:port:user:pass</div>
+                </div>
             </div>
             `}
         </div>
