@@ -50,7 +50,7 @@ export default {
             if (cfspiderPath === 'api/status') {
                 return new Response(JSON.stringify({
                     status: 'online',
-                    version: '1.8.2',
+                    version: '1.8.3',
                     colo: request.cf?.colo || 'unknown',
                     uptime: Date.now() - (globalThis.START_TIME || Date.now())
                 }), { headers: { 'Content-Type': 'application/json' } });
@@ -2173,7 +2173,7 @@ function generateCFspiderPage(request, url, visitorIP, userID, newIpEnabled = tr
     const longitude = request.cf?.longitude || '0';
     const continent = request.cf?.continent || 'XX';
     const lang = url.searchParams.get('lang') || 'zh';
-    const VERSION = '1.8.2';
+    const VERSION = '1.8.3';
     
     // VLESS 配置
     const vlessHost = url.hostname;
@@ -2183,47 +2183,55 @@ function generateCFspiderPage(request, url, visitorIP, userID, newIpEnabled = tr
     
     const countryNames = {
         'JP': '日本', 'CN': '中国', 'US': '美国', 'HK': '香港', 'TW': '台湾',
-        'SG': '新加坡', 'KR': '韩国', 'DE': '德国', 'FR': '法国', 'GB': '英国'
+        'SG': '新加坡', 'KR': '韩国', 'DE': '德国', 'FR': '法国', 'GB': '英国',
+        'NL': '荷兰', 'AU': '澳大利亚', 'CA': '加拿大', 'IN': '印度', 'BR': '巴西'
     };
     
     const coloNames = {
         'NRT': '东京成田', 'HND': '东京羽田', 'KIX': '大阪关西', 'HKG': '香港',
         'SIN': '新加坡', 'ICN': '首尔仁川', 'TPE': '台北桃园', 'LAX': '洛杉矶',
-        'SFO': '旧金山', 'SEA': '西雅图', 'ORD': '芝加哥', 'LHR': '伦敦'
+        'SFO': '旧金山', 'SEA': '西雅图', 'ORD': '芝加哥', 'LHR': '伦敦',
+        'AMS': '阿姆斯特丹', 'FRA': '法兰克福', 'SYD': '悉尼', 'CDG': '巴黎'
     };
     
     const continentNames = { 'AS': '亚洲', 'EU': '欧洲', 'NA': '北美', 'SA': '南美', 'AF': '非洲', 'OC': '大洋洲' };
     
     const i18n = {
         zh: {
-            subtitle: 'Cloudflare 代理网络',
-            nodeLocation: '节点代码', country: '国家', city: '城市', status: '状态', online: '在线',
-            poolTitle: '代理 IP 池', ipAddress: 'IP 地址', latency: '延迟', regionLabel: '地区', type: '类型',
-            apiTitle: 'API 接口', codeTitle: 'Python 使用示例', loading: '加载中...',
-            langSwitch: 'EN', footer: '由 Cloudflare Workers 驱动',
-            nodeInfoTitle: '节点详情', visitorInfoTitle: '访问者信息', visitorIP: '访问者 IP',
-            timezone: '时区', asn: 'ASN', coordinates: '坐标', continent: '大洲',
-            feature1: '全球 300+ 边缘节点', feature2: 'TLS 指纹模拟', feature3: '隐身模式',
-            feature4: 'HTTP/2 支持', feature5: '浏览器自动化', feature6: 'VLESS 协议',
-            vlessTitle: 'VLESS 代理配置', vlessUUID: 'UUID', vlessHost: '服务器', vlessPort: '端口',
-            vlessLink: 'VLESS 链接', vlessCopy: '点击复制', version: '版本',
-            defaultUuidWarning: '⚠️ 安全警告：当前使用默认 UUID，强烈建议通过 Cloudflare Dashboard 设置 UUID 环境变量以提高安全性！',
-            newIp: '自动新 IP'
+            subtitle: 'Cloudflare VLESS 代理网络',
+            nodeLocation: '节点代码', country: '国家/地区', city: '城市', status: '状态', online: '在线',
+            poolTitle: 'IP 池状态', ipAddress: 'IP 地址', latency: '延迟', regionLabel: '地区', type: '类型',
+            apiTitle: 'API 接口', codeTitle: 'Python 使用示例', loading: '正在加载...',
+            langSwitch: 'EN', footer: '由 Cloudflare Workers 强力驱动',
+            nodeInfoTitle: '当前节点', visitorInfoTitle: '访问信息', visitorIP: '您的 IP',
+            timezone: '时区', asn: 'ASN 编号', coordinates: '经纬度', continent: '大洲',
+            feature1: '全球 300+ 节点', feature2: 'TLS 指纹模拟', feature3: '隐身模式',
+            feature4: 'HTTP/2 协议', feature5: '浏览器自动化', feature6: 'VLESS 协议',
+            vlessTitle: 'VLESS 代理配置', vlessUUID: 'UUID', vlessHost: '服务器地址', vlessPort: '端口',
+            vlessLink: '一键导入链接', vlessCopy: '点击复制到剪贴板', version: '版本',
+            defaultUuidWarning: '当前使用公共 UUID，建议通过 Cloudflare Dashboard 设置私有 UUID 环境变量以提高安全性',
+            newIp: '动态 IP', transport: '传输协议', security: '安全协议', encryption: '加密方式',
+            credits: 'VLESS 技术基于 edgetunnel 项目',
+            v2rayClients: '支持的客户端',
+            copySuccess: '已复制!'
         },
         en: {
-            subtitle: 'Cloudflare Proxy Network',
+            subtitle: 'Cloudflare VLESS Proxy Network',
             nodeLocation: 'Node Code', country: 'Country', city: 'City', status: 'Status', online: 'ONLINE',
-            poolTitle: 'PROXY IP POOL', ipAddress: 'IP ADDRESS', latency: 'LATENCY', regionLabel: 'REGION', type: 'TYPE',
+            poolTitle: 'IP Pool Status', ipAddress: 'IP ADDRESS', latency: 'LATENCY', regionLabel: 'REGION', type: 'TYPE',
             apiTitle: 'API ENDPOINTS', codeTitle: 'Python Example', loading: 'LOADING...',
             langSwitch: '中文', footer: 'Powered by Cloudflare Workers',
-            nodeInfoTitle: 'Node Details', visitorInfoTitle: 'Visitor Information', visitorIP: 'Visitor IP',
-            timezone: 'Timezone', asn: 'ASN', coordinates: 'Coordinates', continent: 'Continent',
-            feature1: '300+ Global Edge Nodes', feature2: 'TLS Fingerprint', feature3: 'Stealth Mode',
-            feature4: 'HTTP/2 Support', feature5: 'Browser Automation', feature6: 'VLESS Protocol',
-            vlessTitle: 'VLESS Proxy Config', vlessUUID: 'UUID', vlessHost: 'Server', vlessPort: 'Port',
-            vlessLink: 'VLESS Link', vlessCopy: 'Click to Copy', version: 'Version',
-            defaultUuidWarning: '⚠️ SECURITY WARNING: Using default UUID. Strongly recommend setting UUID environment variable via Cloudflare Dashboard for better security!',
-            newIp: 'Auto New IP'
+            nodeInfoTitle: 'Current Node', visitorInfoTitle: 'Visitor Info', visitorIP: 'Your IP',
+            timezone: 'Timezone', asn: 'ASN Number', coordinates: 'Coordinates', continent: 'Continent',
+            feature1: '300+ Global Nodes', feature2: 'TLS Fingerprint', feature3: 'Stealth Mode',
+            feature4: 'HTTP/2 Protocol', feature5: 'Browser Automation', feature6: 'VLESS Protocol',
+            vlessTitle: 'VLESS Proxy Configuration', vlessUUID: 'UUID', vlessHost: 'Server Address', vlessPort: 'Port',
+            vlessLink: 'One-Click Import Link', vlessCopy: 'Click to copy', version: 'Version',
+            defaultUuidWarning: 'Using public UUID. Set private UUID via Cloudflare Dashboard for better security',
+            newIp: 'Dynamic IP', transport: 'Transport', security: 'Security', encryption: 'Encryption',
+            credits: 'VLESS based on edgetunnel project',
+            v2rayClients: 'Supported Clients',
+            copySuccess: 'Copied!'
         }
     };
     
@@ -2238,71 +2246,483 @@ function generateCFspiderPage(request, url, visitorIP, userID, newIpEnabled = tr
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CFSPIDER // PROXY NETWORK</title>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <title>CFSPIDER // VLESS PROXY NETWORK</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
-        :root { --cyber-dark: #0a0a0f; --cyber-cyan: #00f0ff; --cyber-magenta: #ff2a6d; --cyber-yellow: #ffd700; --cyber-green: #39ff14; }
+        :root { 
+            --bg-primary: #0d1117; 
+            --bg-secondary: #161b22; 
+            --bg-tertiary: #21262d;
+            --accent-cyan: #58a6ff; 
+            --accent-magenta: #f778ba; 
+            --accent-green: #3fb950; 
+            --accent-yellow: #d29922;
+            --accent-orange: #db6d28;
+            --text-primary: #c9d1d9;
+            --text-secondary: #8b949e;
+            --border-color: #30363d;
+        }
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Share Tech Mono', monospace; background: var(--cyber-dark); color: #e0e0e0; min-height: 100vh; overflow-x: hidden; }
-        body::before { content: ''; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, rgba(0,240,255,0.03) 0%, transparent 50%, rgba(255,42,109,0.03) 100%); pointer-events: none; z-index: -1; }
-        .container { max-width: 1400px; margin: 0 auto; padding: 40px 20px; }
-        header { text-align: center; margin-bottom: 60px; position: relative; }
-        h1 { font-family: 'Orbitron', sans-serif; font-size: 4rem; font-weight: 900; background: linear-gradient(90deg, var(--cyber-cyan), var(--cyber-magenta)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: 0.3em; text-shadow: 0 0 50px rgba(0,240,255,0.5); }
-        h1 span { font-size: 1rem; color: var(--cyber-cyan); vertical-align: super; margin-left: 10px; }
-        .subtitle { font-size: 1.1rem; color: #666; letter-spacing: 0.5em; margin-top: 10px; }
-        .lang-switch { position: absolute; top: 0; right: 0; background: transparent; border: 1px solid var(--cyber-cyan); color: var(--cyber-cyan); padding: 8px 20px; cursor: pointer; font-family: 'Orbitron', sans-serif; text-decoration: none; transition: all 0.3s; }
-        .lang-switch:hover { background: var(--cyber-cyan); color: var(--cyber-dark); }
-        .stats-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 20px; margin-bottom: 40px; }
-        .stat-card { background: rgba(0,240,255,0.05); border: 1px solid rgba(0,240,255,0.2); padding: 20px; text-align: center; position: relative; }
-        .stat-label { font-size: 0.75rem; color: #666; letter-spacing: 0.2em; margin-bottom: 8px; }
-        .stat-value { font-family: 'Orbitron', sans-serif; font-size: 1.1rem; color: var(--cyber-cyan); }
-        .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 30px; margin-bottom: 40px; }
-        .info-panel { background: rgba(0,0,0,0.3); border: 1px solid rgba(0,240,255,0.3); padding: 25px; position: relative; }
-        .panel-title { position: absolute; top: -12px; left: 20px; background: var(--cyber-dark); padding: 0 15px; font-family: 'Orbitron', sans-serif; font-size: 0.85rem; color: var(--cyber-cyan); letter-spacing: 0.15em; }
-        .info-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
-        .info-label { color: #666; }
-        .info-value { color: var(--cyber-cyan); }
-        .info-value.online { color: var(--cyber-green); }
-        .features-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 15px; margin-bottom: 40px; }
-        .feature-card { background: rgba(0,240,255,0.08); border: 1px solid rgba(0,240,255,0.2); padding: 20px; text-align: center; }
-        .feature-text { font-size: 0.85rem; color: var(--cyber-cyan); }
-        .vless-section { background: rgba(255,42,109,0.1); border: 1px solid var(--cyber-magenta); padding: 30px; margin-bottom: 40px; position: relative; }
-        .vless-title { position: absolute; top: -12px; left: 20px; background: var(--cyber-dark); padding: 0 15px; font-family: 'Orbitron', sans-serif; font-size: 0.9rem; color: var(--cyber-magenta); letter-spacing: 0.2em; }
-        .vless-link { background: #0a0a0a; padding: 15px; border: 1px solid rgba(255,42,109,0.3); word-break: break-all; font-size: 0.8rem; color: var(--cyber-cyan); cursor: pointer; user-select: all; margin-top: 15px; }
-        .vless-link:hover { border-color: var(--cyber-green); }
-        .pool-section { margin-bottom: 40px; }
-        .pool-section h2 { font-family: 'Orbitron', sans-serif; font-size: 1.2rem; color: var(--cyber-cyan); margin-bottom: 20px; letter-spacing: 0.2em; }
-        table { width: 100%; border-collapse: collapse; background: rgba(0,0,0,0.3); }
-        th, td { padding: 15px; text-align: left; border-bottom: 1px solid rgba(0,240,255,0.1); }
-        th { background: rgba(0,240,255,0.1); color: var(--cyber-cyan); font-family: 'Orbitron', sans-serif; font-size: 0.8rem; letter-spacing: 0.15em; }
-        td { font-size: 0.9rem; }
-        .online { color: var(--cyber-green); }
-        .api-section { margin-bottom: 40px; }
-        .api-section h2 { font-family: 'Orbitron', sans-serif; font-size: 1.2rem; color: var(--cyber-cyan); margin-bottom: 20px; letter-spacing: 0.15em; }
-        .api-item { background: rgba(0,0,0,0.3); border-left: 3px solid var(--cyber-cyan); padding: 15px 20px; margin-bottom: 10px; display: flex; align-items: center; gap: 15px; }
-        .api-method { background: var(--cyber-cyan); color: var(--cyber-dark); padding: 4px 12px; font-family: 'Orbitron', sans-serif; font-size: 0.75rem; font-weight: bold; }
-        .code-section { background: rgba(0,0,0,0.5); border: 1px solid rgba(0,240,255,0.2); padding: 25px; margin-bottom: 40px; }
-        .code-section pre { font-size: 0.85rem; line-height: 1.6; overflow-x: auto; }
-        .code-keyword { color: var(--cyber-magenta); }
-        .code-string { color: var(--cyber-green); }
-        .code-function { color: var(--cyber-yellow); }
-        .code-comment { color: #666; }
-        footer { text-align: center; padding: 40px 0; border-top: 1px solid rgba(0,240,255,0.1); }
-        footer a { color: var(--cyber-cyan); text-decoration: none; margin: 0 15px; }
-        @media (max-width: 1200px) { .stats-grid, .features-grid { grid-template-columns: repeat(3, 1fr); } }
-        @media (max-width: 768px) { .stats-grid, .features-grid { grid-template-columns: repeat(2, 1fr); } .info-grid { grid-template-columns: 1fr; } h1 { font-size: 2.5rem; } }
+        body { 
+            font-family: 'JetBrains Mono', monospace; 
+            background: var(--bg-primary); 
+            color: var(--text-primary); 
+            min-height: 100vh; 
+            line-height: 1.6;
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 40px 24px; }
+        
+        /* Header */
+        header { text-align: center; margin-bottom: 48px; position: relative; }
+        .logo { 
+            font-family: 'Orbitron', sans-serif; 
+            font-size: 3.5rem; 
+            font-weight: 900; 
+            background: linear-gradient(135deg, var(--accent-cyan) 0%, var(--accent-magenta) 100%); 
+            -webkit-background-clip: text; 
+            -webkit-text-fill-color: transparent; 
+            letter-spacing: 0.15em;
+            margin-bottom: 8px;
+        }
+        .version-badge { 
+            display: inline-block;
+            background: var(--accent-magenta); 
+            color: #fff; 
+            padding: 4px 12px; 
+            border-radius: 20px; 
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-left: 12px;
+            vertical-align: middle;
+        }
+        .subtitle { font-size: 1rem; color: var(--text-secondary); letter-spacing: 0.3em; }
+        .lang-switch { 
+            position: absolute; top: 0; right: 0; 
+            background: var(--bg-tertiary); 
+            border: 1px solid var(--border-color); 
+            color: var(--text-primary); 
+            padding: 8px 16px; 
+            border-radius: 6px;
+            cursor: pointer; 
+            font-family: inherit;
+            text-decoration: none; 
+            transition: all 0.2s; 
+        }
+        .lang-switch:hover { background: var(--accent-cyan); color: var(--bg-primary); }
+        
+        /* VLESS Section - Featured */
+        .vless-hero {
+            background: linear-gradient(135deg, rgba(247,120,186,0.15) 0%, rgba(88,166,255,0.15) 100%);
+            border: 2px solid var(--accent-magenta);
+            border-radius: 16px;
+            padding: 32px;
+            margin-bottom: 32px;
+            position: relative;
+            overflow: hidden;
+        }
+        .vless-hero::before {
+            content: '';
+            position: absolute;
+            top: 0; right: 0;
+            width: 200px; height: 200px;
+            background: radial-gradient(circle, rgba(247,120,186,0.3) 0%, transparent 70%);
+            pointer-events: none;
+        }
+        .vless-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        .vless-title-main {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.5rem;
+            color: var(--accent-magenta);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .vless-status {
+            display: flex;
+            gap: 12px;
+        }
+        .status-pill {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .status-pill.active { border-color: var(--accent-green); }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-green); animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        
+        .vless-config-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+        .config-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+        }
+        .config-card-title {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .config-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(48,54,61,0.5);
+        }
+        .config-item:last-child { border-bottom: none; }
+        .config-label { color: var(--text-secondary); font-size: 0.9rem; }
+        .config-value { 
+            color: var(--accent-cyan); 
+            font-weight: 500;
+            font-size: 0.9rem;
+            word-break: break-all;
+            text-align: right;
+            max-width: 60%;
+        }
+        .config-value.uuid { 
+            color: var(--accent-magenta); 
+            font-size: 0.8rem;
+            background: var(--bg-tertiary);
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+        .config-value.success { color: var(--accent-green); }
+        
+        /* VLESS Link Box */
+        .vless-link-box {
+            background: var(--bg-primary);
+            border: 2px solid var(--accent-cyan);
+            border-radius: 12px;
+            padding: 20px;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .vless-link-box:hover { border-color: var(--accent-green); transform: translateY(-2px); }
+        .vless-link-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .vless-link-text {
+            font-size: 0.85rem;
+            color: var(--accent-cyan);
+            word-break: break-all;
+            line-height: 1.8;
+            padding: 12px;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            user-select: all;
+        }
+        .copy-hint {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            background: var(--bg-tertiary);
+            padding: 4px 10px;
+            border-radius: 4px;
+        }
+        .copy-success {
+            background: var(--accent-green) !important;
+            color: #fff !important;
+        }
+        
+        /* Warning Banner */
+        .warning-banner {
+            background: linear-gradient(135deg, rgba(219,109,40,0.2) 0%, rgba(210,153,34,0.2) 100%);
+            border: 1px solid var(--accent-orange);
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+        .warning-icon { font-size: 1.25rem; }
+        .warning-content { flex: 1; }
+        .warning-title { color: var(--accent-orange); font-weight: 600; margin-bottom: 4px; }
+        .warning-text { color: var(--text-secondary); font-size: 0.85rem; }
+        .warning-path { color: var(--accent-cyan); font-size: 0.8rem; margin-top: 8px; }
+        
+        /* Clients Grid */
+        .clients-section {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 24px;
+        }
+        .clients-title {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+        }
+        .clients-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .client-tag {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            color: var(--text-primary);
+        }
+        
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+        .stat-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+        .stat-label { font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px; }
+        .stat-value { font-family: 'Orbitron', sans-serif; font-size: 1.1rem; color: var(--accent-cyan); }
+        .stat-value.online { color: var(--accent-green); }
+        
+        /* Info Grid */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+        .info-panel {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 24px;
+        }
+        .panel-title {
+            font-size: 0.8rem;
+            color: var(--accent-cyan);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .info-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid rgba(48,54,61,0.5); }
+        .info-row:last-child { border-bottom: none; }
+        .info-label { color: var(--text-secondary); }
+        .info-value { color: var(--text-primary); }
+        .info-value.online { color: var(--accent-green); }
+        
+        /* Code Section */
+        .code-section {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 32px;
+            overflow-x: auto;
+        }
+        .code-header {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .code-section pre { font-size: 0.85rem; line-height: 1.8; }
+        .code-keyword { color: var(--accent-magenta); }
+        .code-string { color: var(--accent-green); }
+        .code-function { color: var(--accent-yellow); }
+        .code-comment { color: var(--text-secondary); }
+        
+        /* API Section */
+        .api-section { margin-bottom: 32px; }
+        .section-title {
+            font-size: 1rem;
+            color: var(--accent-cyan);
+            margin-bottom: 16px;
+            font-weight: 600;
+        }
+        .api-grid { display: grid; gap: 8px; }
+        .api-item {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .api-method {
+            background: var(--accent-cyan);
+            color: var(--bg-primary);
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+        .api-path { color: var(--text-primary); font-size: 0.85rem; }
+        
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 32px 0;
+            border-top: 1px solid var(--border-color);
+            margin-top: 32px;
+        }
+        .footer-links { margin: 16px 0; }
+        .footer-links a {
+            color: var(--accent-cyan);
+            text-decoration: none;
+            margin: 0 16px;
+            transition: color 0.2s;
+        }
+        .footer-links a:hover { color: var(--accent-magenta); }
+        .footer-credits { 
+            font-size: 0.8rem; 
+            color: var(--text-secondary); 
+            margin-top: 16px;
+        }
+        .footer-credits a { color: var(--accent-cyan); text-decoration: none; }
+        
+        @media (max-width: 768px) {
+            .logo { font-size: 2.5rem; }
+            .vless-header { flex-direction: column; align-items: flex-start; }
+            .vless-config-grid { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
     <a href="?lang=${lang === 'zh' ? 'en' : 'zh'}" class="lang-switch">${t.langSwitch}</a>
     <div class="container">
         <header>
-            <h1>CFSPIDER<span>v${VERSION}</span></h1>
+            <div class="logo">CFSPIDER<span class="version-badge">v${VERSION}</span></div>
             <p class="subtitle">${t.subtitle}</p>
         </header>
         
+        <!-- VLESS Hero Section -->
+        ${userID ? `
+        <div class="vless-hero">
+            <div class="vless-header">
+                <div class="vless-title-main">
+                    <span>VLESS PROXY</span>
+                </div>
+                <div class="vless-status">
+                    <div class="status-pill active"><span class="status-dot"></span> ${t.online}</div>
+                    <div class="status-pill">${t.newIp}: ON</div>
+                </div>
+            </div>
+            
+            ${isDefaultUUID ? `
+            <div class="warning-banner">
+                <span class="warning-icon">⚠️</span>
+                <div class="warning-content">
+                    <div class="warning-title">Security Notice</div>
+                    <div class="warning-text">${t.defaultUuidWarning}</div>
+                    <div class="warning-path">Dashboard → Workers → Settings → Variables → Add "UUID"</div>
+                </div>
+            </div>
+            ` : ''}
+            
+            <div class="vless-config-grid">
+                <div class="config-card">
+                    <div class="config-card-title">Connection</div>
+                    <div class="config-item">
+                        <span class="config-label">${t.vlessHost}</span>
+                        <span class="config-value">${vlessHost}</span>
+                    </div>
+                    <div class="config-item">
+                        <span class="config-label">${t.vlessPort}</span>
+                        <span class="config-value">443</span>
+                    </div>
+                    <div class="config-item">
+                        <span class="config-label">${t.transport}</span>
+                        <span class="config-value">WebSocket</span>
+                    </div>
+                    <div class="config-item">
+                        <span class="config-label">${t.security}</span>
+                        <span class="config-value success">TLS</span>
+                    </div>
+                </div>
+                <div class="config-card">
+                    <div class="config-card-title">Authentication</div>
+                    <div class="config-item">
+                        <span class="config-label">${t.vlessUUID}</span>
+                        <span class="config-value uuid">${userID}</span>
+                    </div>
+                    <div class="config-item">
+                        <span class="config-label">Path</span>
+                        <span class="config-value">/${userID.substring(0,8)}...</span>
+                    </div>
+                    <div class="config-item">
+                        <span class="config-label">${t.encryption}</span>
+                        <span class="config-value">none</span>
+                    </div>
+                    <div class="config-item">
+                        <span class="config-label">Status</span>
+                        <span class="config-value success">${isDefaultUUID ? 'Public' : 'Private'}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="vless-link-box" onclick="copyVlessLink(this)">
+                <span class="copy-hint" id="copyHint">${t.vlessCopy}</span>
+                <div class="vless-link-label">
+                    <span>${t.vlessLink}</span>
+                </div>
+                <div class="vless-link-text" id="vlessLink">${vlessLink}</div>
+            </div>
+            
+            <div class="clients-section">
+                <div class="clients-title">${t.v2rayClients}</div>
+                <div class="clients-grid">
+                    <span class="client-tag">v2rayN</span>
+                    <span class="client-tag">v2rayNG</span>
+                    <span class="client-tag">Clash Verge</span>
+                    <span class="client-tag">ClashX</span>
+                    <span class="client-tag">Shadowrocket</span>
+                    <span class="client-tag">NekoRay</span>
+                    <span class="client-tag">Surge</span>
+                    <span class="client-tag">Quantumult X</span>
+                </div>
+            </div>
+        </div>
+        ` : ''}
+        
+        <!-- Stats Grid -->
         <div class="stats-grid">
-            <div class="stat-card"><div class="stat-label">${t.nodeLocation}</div><div class="stat-value">${coloName}</div></div>
+            <div class="stat-card"><div class="stat-label">${t.nodeLocation}</div><div class="stat-value">${colo}</div></div>
             <div class="stat-card"><div class="stat-label">${t.country}</div><div class="stat-value">${countryName}</div></div>
             <div class="stat-card"><div class="stat-label">${t.city}</div><div class="stat-value">${cityName}</div></div>
             <div class="stat-card"><div class="stat-label">${t.continent}</div><div class="stat-value">${continentName}</div></div>
@@ -2310,118 +2730,85 @@ function generateCFspiderPage(request, url, visitorIP, userID, newIpEnabled = tr
             <div class="stat-card"><div class="stat-label">${t.version}</div><div class="stat-value">${VERSION}</div></div>
         </div>
         
+        <!-- Info Grid -->
         <div class="info-grid">
             <div class="info-panel">
-                <div class="panel-title">// ${t.nodeInfoTitle}</div>
+                <div class="panel-title">${t.nodeInfoTitle}</div>
                 <div class="info-row"><span class="info-label">${t.nodeLocation}</span><span class="info-value">${coloName}</span></div>
                 <div class="info-row"><span class="info-label">${t.country}</span><span class="info-value">${countryName}</span></div>
                 <div class="info-row"><span class="info-label">${t.city}</span><span class="info-value">${cityName}</span></div>
                 <div class="info-row"><span class="info-label">${t.asn}</span><span class="info-value">AS${asn}</span></div>
                 <div class="info-row"><span class="info-label">${t.timezone}</span><span class="info-value">${timezone}</span></div>
-                <div class="info-row"><span class="info-label">${t.coordinates}</span><span class="info-value">${latitude}, ${longitude}</span></div>
-                </div>
+            </div>
             <div class="info-panel">
-                <div class="panel-title">// ${t.visitorInfoTitle}</div>
+                <div class="panel-title">${t.visitorInfoTitle}</div>
                 <div class="info-row"><span class="info-label">${t.visitorIP}</span><span class="info-value">${visitorIP}</span></div>
                 <div class="info-row"><span class="info-label">${t.country}</span><span class="info-value">${countryName}</span></div>
                 <div class="info-row"><span class="info-label">${t.asn}</span><span class="info-value">AS${asn}</span></div>
-                <div class="info-row"><span class="info-label">${t.status}</span><span class="info-value online">${t.online}</span></div>
+                <div class="info-row"><span class="info-label">${t.coordinates}</span><span class="info-value">${latitude}, ${longitude}</span></div>
             </div>
         </div>
         
-        <div class="features-grid">
-            <div class="feature-card"><div class="feature-text">${t.feature1}</div></div>
-            <div class="feature-card"><div class="feature-text">${t.feature2}</div></div>
-            <div class="feature-card"><div class="feature-text">${t.feature3}</div></div>
-            <div class="feature-card"><div class="feature-text">${t.feature4}</div></div>
-            <div class="feature-card"><div class="feature-text">${t.feature5}</div></div>
-            <div class="feature-card" style="background: rgba(255,42,109,0.15); border-color: var(--cyber-magenta);"><div class="feature-text" style="color: var(--cyber-magenta);">${t.feature6}</div></div>
-            </div>
-        
-        ${userID ? `
-        <div class="vless-section">
-            <div class="vless-title">// ${t.vlessTitle}</div>
-            ${isDefaultUUID ? `
-            <div class="warning-banner" style="background: linear-gradient(135deg, rgba(255,165,0,0.2) 0%, rgba(255,69,0,0.2) 100%); border: 1px solid #ff6600; border-radius: 8px; padding: 12px 16px; margin: 10px 0; display: flex; align-items: center; gap: 10px;">
-                <span style="font-size: 1.5rem;">⚠️</span>
-                <div>
-                    <div style="color: #ffaa00; font-weight: bold; margin-bottom: 4px;">SECURITY WARNING / 安全警告</div>
-                    <div style="color: #ffcc66; font-size: 0.85rem;">${t.defaultUuidWarning}</div>
-                    <div style="color: #88aaff; font-size: 0.8rem; margin-top: 6px;">
-                        Cloudflare Dashboard → Workers → Settings → Variables → Add UUID
-            </div>
-            </div>
-            </div>
-            ` : ''}
-            <div class="info-grid" style="margin-top: 10px; margin-bottom: 0;">
-                <div class="info-panel" style="border-color: var(--cyber-magenta);">
-                    <div class="panel-title" style="color: var(--cyber-magenta);">// VLESS CONFIG</div>
-                    <div class="info-row"><span class="info-label">${t.vlessUUID}</span><span class="info-value" style="color: ${isDefaultUUID ? '#ffaa00' : 'var(--cyber-magenta)'}; font-size: 0.85rem; word-break: break-all;">${userID}${isDefaultUUID ? ' (默认/Default)' : ''}</span></div>
-                    <div class="info-row"><span class="info-label">${t.vlessHost}</span><span class="info-value">${vlessHost}</span></div>
-                    <div class="info-row"><span class="info-label">${t.vlessPort}</span><span class="info-value">${vlessPort}</span></div>
-                    <div class="info-row"><span class="info-label">TLS</span><span class="info-value online">enabled</span></div>
-                    <div class="info-row"><span class="info-label">Transport</span><span class="info-value">WebSocket</span></div>
-                    <div class="info-row"><span class="info-label">${t.newIp}</span><span class="info-value online">ON (Auto)</span></div>
-            </div>
-                <div class="info-panel" style="border-color: var(--cyber-magenta);">
-                    <div class="panel-title" style="color: var(--cyber-magenta);">// ${t.vlessLink}</div>
-                    <div class="vless-link" onclick="navigator.clipboard.writeText(this.innerText).then(() => { this.style.borderColor = 'var(--cyber-green)'; setTimeout(() => { this.style.borderColor = 'rgba(255,42,109,0.3)'; }, 1000); });" title="${t.vlessCopy}">${vlessLink}</div>
-            </div>
-        </div>
-        </div>
-        ` : ''}
-        
-        <div class="pool-section">
-            <h2>${t.poolTitle}</h2>
-            <table>
-                <thead><tr><th>${t.ipAddress}</th><th>${t.type}</th><th>${t.status}</th><th>${t.latency}</th><th>${t.regionLabel}</th></tr></thead>
-                <tbody id="poolBody"><tr><td colspan="5">${t.loading}</td></tr></tbody>
-            </table>
-        </div>
-        
-        <div class="api-section">
-            <h2>// ${t.apiTitle}</h2>
-            <div class="api-item"><span class="api-method">GET</span>/api/fetch?url=https://example.com</div>
-            <div class="api-item"><span class="api-method">GET</span>/api/json?url=https://httpbin.org/ip</div>
-            <div class="api-item"><span class="api-method">GET</span>/api/pool</div>
-            <div class="api-item"><span class="api-method">POST</span>/proxy?url=...&method=GET</div>
-            <div class="api-item"><span class="api-method">GET</span>/api/status</div>
-        </div>
-        
+        <!-- Code Example -->
         <div class="code-section">
-            <pre><span class="code-comment"># pip install cfspider</span>
-<span class="code-keyword">import</span> cfspider
+            <div class="code-header">// Python Example - pip install cfspider</div>
+            <pre><span class="code-keyword">import</span> cfspider
 
-<span class="code-comment"># ${isDefaultUUID ? '使用默认 UUID 时，只需填写 Workers 地址' : '使用自定义 UUID 时，需要填写 uuid 参数'}</span>
-<span class="code-keyword">for</span> i <span class="code-keyword">in</span> range(5):
+<span class="code-comment"># ${lang === 'zh' ? '使用 CFspider 代理池获取不同 IP' : 'Use CFspider proxy pool for different IPs'}</span>
+<span class="code-keyword">for</span> i <span class="code-keyword">in</span> range(<span class="code-string">5</span>):
+    response = cfspider.<span class="code-function">get</span>(
+        <span class="code-string">"https://httpbin.org/ip"</span>,
+        cf_proxies=<span class="code-string">"https://your-workers.dev"</span>${isDefaultUUID ? '' : `,
+        uuid=<span class="code-string">"your-uuid-here"</span>`}
+    )
+    <span class="code-function">print</span>(response.json())
+
+<span class="code-comment"># ${lang === 'zh' ? '固定 IP 模式 - 保持同一出口 IP' : 'Static IP mode - keep same IP'}</span>
 response = cfspider.<span class="code-function">get</span>(
     <span class="code-string">"https://httpbin.org/ip"</span>,
-        cf_proxies=<span class="code-string">"https://${url.hostname}"</span>${isDefaultUUID ? '' : `,
-        uuid=<span class="code-string">"${userID}"</span>`}
-    )
-    <span class="code-function">print</span>(response.json())  <span class="code-comment"># 每次都是不同的 IP</span></pre>
+    cf_proxies=<span class="code-string">"https://your-workers.dev"</span>,
+    static_ip=<span class="code-keyword">True</span>
+)</pre>
+        </div>
+        
+        <!-- API Section -->
+        <div class="api-section">
+            <div class="section-title">${t.apiTitle}</div>
+            <div class="api-grid">
+                <div class="api-item"><span class="api-method">GET</span><span class="api-path">/api/fetch?url=https://example.com</span></div>
+                <div class="api-item"><span class="api-method">GET</span><span class="api-path">/api/json?url=https://httpbin.org/ip</span></div>
+                <div class="api-item"><span class="api-method">GET</span><span class="api-path">/api/config</span></div>
+                <div class="api-item"><span class="api-method">GET</span><span class="api-path">/api/pool</span></div>
+                <div class="api-item"><span class="api-method">GET</span><span class="api-path">/api/status</span></div>
+            </div>
         </div>
         
         <footer>
-            <p>CFSPIDER v${VERSION}</p>
-            <p>
-                <a href="https://github.com/violettoolssite/CFspider" target="_blank">GITHUB</a>
-                <a href="https://pypi.org/project/cfspider/" target="_blank">PYPI</a>
+            <div class="footer-links">
+                <a href="https://github.com/violettoolssite/CFspider" target="_blank">GitHub</a>
+                <a href="https://pypi.org/project/cfspider/" target="_blank">PyPI</a>
+                <a href="https://www.cfspider.com/" target="_blank">Website</a>
+            </div>
+            <p>CFSPIDER v${VERSION} &bull; ${t.footer}</p>
+            <p class="footer-credits">
+                ${t.credits} - <a href="https://github.com/cmliu/edgetunnel" target="_blank">@cmliu/edgetunnel</a>
             </p>
-            <p style="margin-top:15px;">${t.footer}</p>
         </footer>
     </div>
     
     <script>
-        async function loadPool() {
-            try {
-                const resp = await fetch('/api/pool');
-                const data = await resp.json();
-                const tbody = document.getElementById('poolBody');
-                tbody.innerHTML = data.pool.map(p => '<tr><td>' + p.ip + '</td><td>' + p.type + '</td><td class="online">' + p.status + '</td><td>' + p.latency + 'ms</td><td>' + p.region + '</td></tr>').join('');
-            } catch (e) { console.error(e); }
+        function copyVlessLink(el) {
+            const link = document.getElementById('vlessLink').innerText;
+            const hint = document.getElementById('copyHint');
+            navigator.clipboard.writeText(link).then(() => {
+                hint.textContent = '${t.copySuccess}';
+                hint.classList.add('copy-success');
+                setTimeout(() => {
+                    hint.textContent = '${t.vlessCopy}';
+                    hint.classList.remove('copy-success');
+                }, 2000);
+            });
         }
-        loadPool();
     </script>
 </body>
 </html>`;
