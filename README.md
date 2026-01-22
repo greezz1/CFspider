@@ -152,6 +152,90 @@ VLESS 协议通过 Cloudflare WARP 网络出口，出口 IP 主要来自 Cloudfl
 | **浏览器支持** | Playwright 自动化 | 全系统代理 |
 | **v2ray 客户端** | 支持 VLESS 链接导入 | 独立客户端 |
 
+### 代码对比：CFspider vs WARP 客户端爬虫
+
+**方案一：CFspider（推荐）**
+
+```python
+# 步骤：pip install cfspider，然后直接使用
+import cfspider
+
+# 每次请求自动换 IP，无需任何系统配置
+for i in range(10):
+    response = cfspider.get(
+        "https://httpbin.org/ip",
+        cf_proxies="https://your-workers.dev"
+    )
+    print(f"请求 {i+1}: {response.json()['origin']}")  # 每次都是不同的 IP
+```
+
+**方案二：WARP 客户端 + requests**
+
+```python
+# 步骤：
+# 1. 下载安装 1.1.1.1 WARP 客户端（国内需要翻墙下载）
+# 2. 注册账号（国内需要翻墙）
+# 3. 连接 WARP（国内无法直接连接，需要其他代理中转）
+# 4. 开启系统代理或 SOCKS5 代理模式
+# 5. 编写代码使用代理
+
+import requests
+
+# WARP 客户端通常监听本地 40000 端口
+proxies = {
+    "http": "socks5://127.0.0.1:40000",
+    "https": "socks5://127.0.0.1:40000"
+}
+
+for i in range(10):
+    response = requests.get("https://httpbin.org/ip", proxies=proxies)
+    print(f"请求 {i+1}: {response.json()['origin']}")  # 每次都是相同的 IP！
+```
+
+### 操作步骤对比
+
+| 步骤 | CFspider | WARP 客户端 |
+|------|----------|-------------|
+| 1. 安装 | `pip install cfspider` | 下载 1.1.1.1 客户端（国内需翻墙） |
+| 2. 部署 | 复制 workers.js 到 CF Workers | 注册账号（国内需翻墙） |
+| 3. 配置 | 无需配置 | 启动客户端并连接（国内无法直连） |
+| 4. 使用 | 一行代码 `cfspider.get(...)` | 配置系统代理或 SOCKS5 |
+| 5. 换 IP | 自动（每次请求） | 手动（断开重连） |
+| 总耗时 | 约 5 分钟 | 约 30+ 分钟（还可能失败） |
+
+### 国内使用限制
+
+| 方案 | 国内可用性 | 解决方案 |
+|------|-----------|----------|
+| **CFspider** | 可用 | 使用自定义域名绑定 Workers |
+| **WARP 客户端** | 不可用 | 无法直接连接，需要其他代理中转 |
+
+**为什么 WARP 客户端在国内无法使用？**
+
+1. **连接被阻断**：1.1.1.1 和 WARP 服务器 IP 在国内被屏蔽
+2. **无法注册**：注册过程需要访问被屏蔽的服务器
+3. **无法下载**：官方下载页面可能无法访问
+4. **即使安装也无法连接**：握手过程会被干扰
+
+**CFspider 为什么在国内可用？**
+
+1. **自定义域名**：绑定自己的域名到 Workers，不走默认的 workers.dev
+2. **WebSocket 连接**：VLESS 使用 WebSocket，与普通 HTTPS 流量无异
+3. **TLS 加密**：所有流量都是标准 TLS 加密，无特征
+4. **无需额外代理**：直接从国内连接你的自定义域名即可
+
+```python
+# 国内使用示例 - 使用自定义域名
+import cfspider
+
+# 绑定自定义域名后，直接连接
+response = cfspider.get(
+    "https://httpbin.org/ip",
+    cf_proxies="https://proxy.yourdomain.com"  # 你的自定义域名
+)
+print(response.json())
+```
+
 ### 合规使用 vs 违规滥用
 
 | 对比项 | 违规滥用：直接攻击 CF CDN IP | CFspider 官方方式：Workers 部署 |
