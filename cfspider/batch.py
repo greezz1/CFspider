@@ -220,7 +220,7 @@ def batch(
         retry: 失败重试次数
         timeout: 超时时间（秒）
         cf_proxies: Cloudflare Workers 代理地址
-        token: 鉴权 token
+        token: 保留参数（当前未使用）
         impersonate: TLS 指纹模拟
         stealth: 是否启用隐身模式
         stealth_browser: 隐身模式的浏览器类型
