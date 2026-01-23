@@ -52,7 +52,7 @@ export default {
             if (cfspiderPath === 'api/status') {
                 return new Response(JSON.stringify({
                     status: 'online',
-                    version: '1.8.4',
+                    version: '1.8.6',
                     colo: request.cf?.colo || 'unknown',
                     uptime: Date.now() - (globalThis.START_TIME || Date.now())
                 }), { headers: { 'Content-Type': 'application/json' } });
@@ -68,7 +68,7 @@ export default {
                 const configResponse = {
                     host: url.hostname,
                     new_ip: newIpEnabled,
-                    version: '1.8.4',
+                    version: '1.8.6',
                     is_default_uuid: isDefaultUUID,
                     two_proxy_enabled: !!twoProxyConfig
                 };
@@ -97,6 +97,55 @@ export default {
                 }
             });
         }
+            // 代理请求（Python 客户端使用）
+            if (cfspiderPath === 'proxy' || cfspiderPath.startsWith('proxy?')) {
+                const targetUrl = url.searchParams.get('url');
+                const method = url.searchParams.get('method') || 'GET';
+                
+                if (!targetUrl) {
+                    return new Response(JSON.stringify({error: 'Missing url parameter'}), {
+                        status: 400,
+                        headers: {'Content-Type': 'application/json'}
+                    });
+                }
+                
+                try {
+                    // 提取自定义请求头
+                    const proxyHeaders = {};
+                    for (const [key, value] of request.headers) {
+                        if (key.toLowerCase().startsWith('x-cfspider-header-')) {
+                            const originalKey = key.substring(18); // 去掉 'x-cfspider-header-' 前缀
+                            proxyHeaders[originalKey] = value;
+                        }
+                    }
+                    
+                    // 创建代理请求
+                    const proxyRequest = new Request(targetUrl, {
+                        method: method,
+                        headers: proxyHeaders,
+                        body: method !== 'GET' && method !== 'HEAD' ? request.body : null
+                    });
+                    
+                    const response = await fetch(proxyRequest);
+                    
+                    // 返回响应，添加 CORS 和节点信息
+                    const responseHeaders = new Headers(response.headers);
+                    responseHeaders.set('Access-Control-Allow-Origin', '*');
+                    responseHeaders.set('X-CF-Colo', request.cf?.colo || 'unknown');
+                    responseHeaders.set('X-CFspider-Version', '1.8.6');
+                    
+                    return new Response(response.body, {
+                        status: response.status,
+                        headers: responseHeaders
+                    });
+                } catch (error) {
+                    return new Response(JSON.stringify({error: error.message}), {
+                        status: 500,
+                        headers: {'Content-Type': 'application/json'}
+                    });
+                }
+            }
+            
             // 设置 new_ip 开关（通过 POST 请求）
             if (cfspiderPath === 'api/config/new_ip' && request.method === 'POST') {
                 // 注意：Cloudflare Workers 不支持动态修改环境变量
