@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CFspider X27CN Decrypt - 专用加密解密工具</title>
+    <title>CFspider X27CN 解密工具</title>
     <style>
         * {
             margin: 0;
@@ -273,28 +273,25 @@
 <body>
     <div class="container">
         <h1>CFspider X27CN Decrypt</h1>
-        <p class="subtitle">CFspider 项目专用加密解密工具 v2.0 - 支持智能识别多种格式</p>
+        <p class="subtitle">CFspider 破皮版 Workers 专用解密工具 v3.1 (X27CN-v2 + 标签封装)</p>
         
         <div class="info-box">
             <strong>CFspider 项目专用解密工具</strong><br><br>
-            本工具用于解密 CFspider Workers 返回的 X27CN 加密响应。<br><br>
-            <strong>支持的格式：</strong><br>
-            • 纯十六进制 X27CN 加密字符串（新版）<br>
-            • 带颜文字/生僻字的混淆格式（旧版）<br>
-            • JSON 格式 {"d":"..."} 包装的加密数据
+            本工具用于解密 CFspider 破皮版 Workers 返回的 X27CN 加密响应。<br><br>
+            <strong>使用方法：</strong><br>
+            1. 访问 Workers 的 <code>/x2727admin</code> 路径获取加密响应<br>
+            2. 复制返回的十六进制加密字符串<br>
+            3. 粘贴到下方输入框，自动解密获取 VLESS 链接
         </div>
         
         <div class="input-group">
             <label>粘贴 Workers 响应 (任何格式均可)</label>
-            <textarea id="encryptedData" placeholder="直接粘贴从 Workers 获取的任何响应...
+            <textarea id="encryptedData" placeholder="直接粘贴从 Workers /x2727admin 获取的加密响应...
 
-示例1 (加密字符串):
-(◕‿◕)龖7f8a2b3c龘d5e6f7a8(◠‿◠)靐b9c0d1e2...
+示例 (<xxxx> 标签加密格式):
+<7f8a><2b3c><d5e6><f7a8><b9c0><d1e2>...
 
-示例2 (旧版JSON):
-{&quot;s&quot;:&quot;ok&quot;,&quot;d&quot;:&quot;7f8a2b3c...&quot;}
-
-直接粘贴，自动识别！"></textarea>
+直接粘贴，自动解密！"></textarea>
         </div>
         
         <div class="input-group">
@@ -327,8 +324,7 @@
         
         <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); text-align: center; color: #666; font-size: 12px;">
             <p><strong>CFspider</strong> - Cloudflare Workers Proxy Solution</p>
-            <p>X27CN 加密算法 · XOR + 位旋转 + 颜文字混淆</p>
-            <p style="margin-top: 10px; color: #888;">© 2026 CFspider Project · Apache 2.0 License</p>
+            <p style="color: #555;">X27CN v2 加密 · 密钥扩展 + S-Box + 状态依赖 · &lt;xxxx&gt; 标签封装</p>
         </div>
     </div>
 
@@ -342,11 +338,23 @@
         let decryptedData = null;
         let decryptedJson = null;
         
-        // 清理加密字符串 - 支持纯hex和混淆格式
+        // 清理加密字符串 - 支持 <xxxx> 格式和纯hex格式
         function cleanEncryptedString(str) {
             console.log('[清理] 输入长度:', str.length);
             
-            // 检查是否为纯hex格式（新版Worker）
+            // 检测 <xxxx> 标签格式
+            if (str.includes('<') && str.includes('>')) {
+                console.log('[清理] 检测到 <xxxx> 标签格式');
+                // 提取所有 <xxxx> 标签中的内容
+                const matches = str.match(/<([0-9a-fA-F]{1,4})>/g);
+                if (matches && matches.length > 0) {
+                    const hex = matches.map(m => m.replace(/[<>]/g, '')).join('');
+                    console.log('[清理] 提取标签内容，长度:', hex.length);
+                    return hex;
+                }
+            }
+            
+            // 检查是否为纯hex格式
             if (/^[0-9a-fA-F]+$/.test(str.trim())) {
                 console.log('[清理] 检测到纯hex格式');
                 return str.trim();
@@ -364,54 +372,89 @@
             return result;
         }
         
-        // x27cn 解密 - 增强版
+        // x27cn v2 解密 - 增强版 (密钥扩展 + S-Box + 状态依赖)
         function x27cnDecrypt(encryptedStr, key = X27CN_KEY) {
             if (!encryptedStr) {
-                console.log('[x27cn] 错误: 输入为空');
+                console.log('[x27cn v2] 错误: 输入为空');
                 return null;
             }
             
             const hex = cleanEncryptedString(encryptedStr);
-            console.log(`[x27cn] 清理后十六进制长度: ${hex.length}, 前32字符: ${hex.substring(0, 32)}`);
+            console.log(`[x27cn v2] 清理后十六进制长度: ${hex.length}, 前32字符: ${hex.substring(0, 32)}`);
             
             if (hex.length === 0) {
-                console.log('[x27cn] 错误: 清理后没有有效的十六进制字符');
+                console.log('[x27cn v2] 错误: 清理后没有有效的十六进制字符');
                 return null;
             }
             
-            // 如果长度是奇数，尝试移除末尾字符
             let finalHex = hex;
             if (hex.length % 2 !== 0) {
-                console.log('[x27cn] 警告: 十六进制长度为奇数，尝试修复');
+                console.log('[x27cn v2] 警告: 十六进制长度为奇数，尝试修复');
                 finalHex = hex.substring(0, hex.length - 1);
             }
             
             if (finalHex.length < 4) {
-                console.log('[x27cn] 错误: 数据太短');
+                console.log('[x27cn v2] 错误: 数据太短');
                 return null;
             }
             
             const keyBytes = new TextEncoder().encode(key);
+            
+            // 1. 密钥扩展 (与加密端一致)
+            const expandedKey = new Uint8Array(256);
+            for (let i = 0; i < 256; i++) {
+                expandedKey[i] = keyBytes[i % keyBytes.length] ^ (7 * i + 13) & 0xFF;
+            }
+            
+            // 2. 生成 S-Box 和 逆 S-Box
+            const sbox = new Uint8Array(256);
+            const invSbox = new Uint8Array(256);
+            for (let i = 0; i < 256; i++) {
+                const v = (167 * i + 89) & 0xFF;
+                sbox[i] = v;
+                invSbox[v] = i;
+            }
+            
+            // 3. Hex 转字节
             const bytes = new Uint8Array(finalHex.length / 2);
             for (let i = 0; i < bytes.length; i++) {
                 bytes[i] = parseInt(finalHex.substr(i * 2, 2), 16);
             }
             
+            // 4. 预计算所有状态值 (加密时: c = (c + v + k[(i+128)%256]) & 0xFF)
+            let state = keyBytes.reduce((a, b) => a ^ b, 0);
+            const states = [state];
+            for (let i = 0; i < bytes.length; i++) {
+                state = (state + bytes[i] + expandedKey[(i + 128) % 256]) & 0xFF;
+                states.push(state);
+            }
+            
+            // 5. 解密 (逆向4轮变换)
             const result = new Uint8Array(bytes.length);
             for (let i = 0; i < bytes.length; i++) {
                 let b = bytes[i];
-                b = (b - i + 256) & 0xFF;
-                b = ((b >> 3) | (b << 5)) & 0xFF;
-                b = b ^ keyBytes[i % keyBytes.length];
+                
+                // 逆第4轮: 减去位置偏移和状态
+                b = (b - 3 * i - states[i] + 512) & 0xFF;
+                
+                // 逆第3轮: 右旋转5位 (左旋转3位)
+                b = ((b >> 5) | (b << 3)) & 0xFF;
+                
+                // 逆第2轮: 逆 S-Box 替换
+                b = invSbox[b];
+                
+                // 逆第1轮: XOR with expanded key
+                b = b ^ expandedKey[i % 256];
+                
                 result[i] = b;
             }
             
             try {
                 const decoded = new TextDecoder('utf-8', { fatal: false }).decode(result);
-                console.log(`[x27cn] 解密成功，长度: ${decoded.length}, 前50字符: ${decoded.substring(0, 50)}`);
+                console.log(`[x27cn v2] 解密成功，长度: ${decoded.length}, 前50字符: ${decoded.substring(0, 50)}`);
                 return decoded;
             } catch (e) {
-                console.log('[x27cn] UTF-8解码失败，尝试其他编码');
+                console.log('[x27cn v2] UTF-8解码失败');
                 return new TextDecoder('utf-8').decode(result);
             }
         }
