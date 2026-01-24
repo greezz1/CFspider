@@ -19,6 +19,7 @@ test_*.py
 x27cn-pages/X27CN_ALGORITHM.md
 x27cn-pages/index.html
 decrypt-pages/
+decrypt-server/
 
 # 镜像输出目录
 mirror/

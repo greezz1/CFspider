@@ -47,8 +47,7 @@
 # 5. 使用解密工具获取 VLESS 链接
 ```
 
-**解密工具：** [https://x27cn.cfspider.com](https://x27cn.cfspider.com) | 源码：`x27cn-pages/index.html`
-
+**解密工具：** [http://115.190.229.8:8899](http://115.190.229.8:8899)
 ---
 
 ## 支持 v2ray/Xray 客户端
