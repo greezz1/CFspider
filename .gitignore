@@ -18,10 +18,9 @@ test_*.py
 # ========================================
 # 机密文件 - 绝对不上传 GitHub
 # ========================================
-# 解密算法文档
-x27cn-pages/X27CN_ALGORITHM.md
-# 解密工具页面（包含混淆的解密逻辑）
-x27cn-pages/index.html
+# 整个 x27cn-pages 目录（包含解密工具和算法文档）
+x27cn-pages/
+
 # 解密服务端代码
 decrypt-pages/
 decrypt-server/

@@ -48,6 +48,54 @@
 ```
 
 **解密工具：** [https://x27cn.cfspider.com](https://x27cn.cfspider.com)
+
+---
+
+## X27CN 加密库
+
+X27CN 是 CFspider 使用的代码混淆加密算法，现已作为独立 Python 库发布。
+
+### 安装
+
+```bash
+pip install x27cn
+```
+
+### 快速使用
+
+```python
+import x27cn
+
+# 加密
+encrypted = x27cn.encrypt('Hello World')
+print(encrypted)  # <faee><38db><e120>...
+
+# 解密
+decrypted = x27cn.decrypt(encrypted)
+print(decrypted)  # Hello World
+
+# 自定义密钥
+encrypted = x27cn.encrypt('敏感数据', key='mySecretKey')
+decrypted = x27cn.decrypt(encrypted, key='mySecretKey')
+```
+
+### 支持的格式
+
+```python
+# 标准格式（<xxxx> 标签）
+encrypted = x27cn.encrypt('text')
+
+# 纯十六进制
+hex_encrypted = x27cn.encrypt_hex('text')
+
+# Base64
+b64_encrypted = x27cn.encrypt_base64('text')
+```
+
+### 安全说明
+
+X27CN 设计用于**代码混淆**，不是密码学安全的加密算法。适用于前端代码混淆、API 响应混淆、配置文件保护等场景。
+
 ---
 
 ## 支持 v2ray/Xray 客户端
