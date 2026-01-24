@@ -15,6 +15,7 @@ edgetunnel_proxy.py
 test.py
 test_*.py
 *.html
+!x27cn-pages/index.html
 
 # 镜像输出目录
 mirror/
