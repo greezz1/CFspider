@@ -226,7 +226,7 @@ x27cn decrypt -t "<faee><38db>..."
 
 ### 在线工具
 
-访问 [X27CN 在线工具](https://cfspider.pages.dev) 可直接在浏览器中进行加密/解密和代码混淆。
+访问 [X27CN 在线工具](https://x27cn.cfspider.com) 可直接在浏览器中进行加密/解密和代码混淆。
 
 ### 安全说明
 
