@@ -901,10 +901,29 @@ for i in range(5):
 ```python
 import cfspider
 
-# 创建 Workers（自动部署到 Cloudflare）
+# 基本用法 - 自动部署 Workers
 workers = cfspider.make_workers(
-    api_token="your-cloudflare-api-token",  # API Token
-    account_id="your-account-id"             # Account ID
+    api_token="your-cloudflare-api-token",
+    account_id="your-account-id"
+)
+
+# 指定环境变量（UUID、PROXYIP 等）
+workers = cfspider.make_workers(
+    api_token="your-api-token",
+    account_id="your-account-id",
+    uuid="your-custom-uuid",           # 固定 UUID
+    proxyip="proxyip.fxxk.dedyn.io"    # 代理 IP
+)
+
+# 使用完整环境变量
+workers = cfspider.make_workers(
+    api_token="your-api-token",
+    account_id="your-account-id",
+    env_vars={
+        "UUID": "your-uuid",
+        "PROXYIP": "1.2.3.4",
+        "SOCKS5": "user:pass@host:port"
+    }
 )
 
 # 直接用于请求（Workers 失效时自动重建）
@@ -930,6 +949,13 @@ workers.stop()
 **获取 Account ID：**
 1. 进入 Workers & Pages
 2. 右侧边栏可以看到 Account ID
+
+**支持的环境变量：**
+| 变量名 | 说明 |
+|--------|------|
+| `UUID` | VLESS UUID（固定 IP 时使用） |
+| `PROXYIP` | 优选 IP / 代理 IP |
+| `SOCKS5` | SOCKS5 代理（格式: user:pass@host:port） |
 
 ### 浏览器模式
 

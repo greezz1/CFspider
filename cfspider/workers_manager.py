@@ -214,7 +214,8 @@ class WorkersManager:
         account_id: str,
         worker_name: Optional[str] = None,
         auto_recreate: bool = True,
-        check_interval: int = 60
+        check_interval: int = 60,
+        env_vars: Optional[dict] = None
     ):
         """
         初始化 Workers 管理器
@@ -225,18 +226,30 @@ class WorkersManager:
             worker_name: Workers 名称（可选，不填则自动生成）
             auto_recreate: 失效后是否自动重建（默认 True）
             check_interval: 健康检查间隔（秒，默认 60）
+            env_vars: Workers 环境变量（可选）
+                常用变量：
+                - UUID: VLESS UUID
+                - PROXYIP: 代理 IP
+                - SOCKS5: SOCKS5 代理地址
+                
+                示例: {"UUID": "your-uuid", "PROXYIP": "1.2.3.4"}
         """
         self.api_token = api_token
         self.account_id = account_id
         self.worker_name = worker_name or self._generate_name()
         self.auto_recreate = auto_recreate
         self.check_interval = check_interval
+        self.env_vars = env_vars or {}
         
         self._url: Optional[str] = None
         self._uuid: Optional[str] = None
         self._healthy = False
         self._check_thread: Optional[threading.Thread] = None
         self._stop_check = False
+        
+        # 如果用户指定了 UUID 环境变量，记录下来
+        if 'UUID' in self.env_vars:
+            self._uuid = self.env_vars['UUID']
         
         # 创建 Workers
         self._create_worker()
@@ -262,23 +275,55 @@ class WorkersManager:
         api_url = f"https://api.cloudflare.com/client/v4/accounts/{self.account_id}/workers/scripts/{self.worker_name}"
         
         try:
-            # 上传脚本
-            response = requests.put(
-                api_url,
-                headers=self._get_headers(),
-                data=WORKERS_SCRIPT,
-                timeout=30
-            )
+            # 如果有环境变量，使用 multipart/form-data 格式
+            if self.env_vars:
+                # 构建元数据
+                metadata = {
+                    "main_module": "worker.js",
+                    "bindings": []
+                }
+                
+                # 添加环境变量绑定
+                for key, value in self.env_vars.items():
+                    metadata["bindings"].append({
+                        "type": "plain_text",
+                        "name": key,
+                        "text": str(value)
+                    })
+                
+                import json
+                
+                # 使用 multipart 上传
+                files = {
+                    'metadata': (None, json.dumps(metadata), 'application/json'),
+                    'worker.js': ('worker.js', WORKERS_SCRIPT, 'application/javascript+module')
+                }
+                
+                response = requests.put(
+                    api_url,
+                    headers={"Authorization": f"Bearer {self.api_token}"},
+                    files=files,
+                    timeout=30
+                )
+            else:
+                # 无环境变量，直接上传脚本
+                response = requests.put(
+                    api_url,
+                    headers=self._get_headers(),
+                    data=WORKERS_SCRIPT,
+                    timeout=30
+                )
             
             if response.status_code in (200, 201):
                 result = response.json()
                 if result.get("success"):
-                    # 获取 Workers URL
-                    self._url = f"https://{self.worker_name}.{self.account_id[:8]}.workers.dev"
+                    # 获取 Workers URL（需要获取正确的子域名）
+                    self._url = self._get_workers_url()
                     self._healthy = True
                     
-                    # 尝试获取 UUID
-                    self._fetch_uuid()
+                    # 如果没有预设 UUID，尝试获取
+                    if not self._uuid:
+                        self._fetch_uuid()
                     
                     print(f"[CFspider] Workers 创建成功: {self._url}")
                     return True
@@ -291,6 +336,28 @@ class WorkersManager:
             print(f"[CFspider] 创建 Workers 异常: {e}")
         
         return False
+    
+    def _get_workers_url(self) -> str:
+        """获取 Workers 的正确 URL"""
+        # 尝试获取子域名
+        try:
+            api_url = f"https://api.cloudflare.com/client/v4/accounts/{self.account_id}/workers/subdomain"
+            response = requests.get(
+                api_url,
+                headers={"Authorization": f"Bearer {self.api_token}"},
+                timeout=10
+            )
+            if response.ok:
+                result = response.json()
+                if result.get("success"):
+                    subdomain = result.get("result", {}).get("subdomain")
+                    if subdomain:
+                        return f"https://{self.worker_name}.{subdomain}.workers.dev"
+        except:
+            pass
+        
+        # 回退到默认格式
+        return f"https://{self.worker_name}.{self.account_id[:8]}.workers.dev"
     
     def _fetch_uuid(self):
         """从 Workers 获取 UUID"""
@@ -392,7 +459,12 @@ def make_workers(
     account_id: str,
     worker_name: Optional[str] = None,
     auto_recreate: bool = True,
-    check_interval: int = 60
+    check_interval: int = 60,
+    env_vars: Optional[dict] = None,
+    # 常用环境变量快捷参数
+    uuid: Optional[str] = None,
+    proxyip: Optional[str] = None,
+    socks5: Optional[str] = None
 ) -> WorkersManager:
     """
     创建 Cloudflare Workers 并返回管理器
@@ -409,6 +481,13 @@ def make_workers(
         worker_name: Workers 名称（可选，不填则自动生成）
         auto_recreate: 失效后是否自动重建（默认 True）
         check_interval: 健康检查间隔秒数（默认 60）
+        env_vars: Workers 环境变量字典（可选）
+            示例: {"UUID": "xxx", "PROXYIP": "1.2.3.4", "CUSTOM_VAR": "value"}
+        
+        # 常用环境变量快捷参数（会合并到 env_vars）
+        uuid: VLESS UUID（等同于 env_vars={"UUID": "xxx"}）
+        proxyip: 代理 IP（等同于 env_vars={"PROXYIP": "xxx"}）
+        socks5: SOCKS5 代理地址（等同于 env_vars={"SOCKS5": "xxx"}）
     
     Returns:
         WorkersManager: Workers 管理器，可直接用于 cf_proxies
@@ -416,10 +495,35 @@ def make_workers(
     Example:
         >>> import cfspider
         >>> 
-        >>> # 创建 Workers
+        >>> # 基本用法
         >>> workers = cfspider.make_workers(
         ...     api_token="your-api-token",
         ...     account_id="your-account-id"
+        ... )
+        >>> 
+        >>> # 指定 UUID（固定 IP）
+        >>> workers = cfspider.make_workers(
+        ...     api_token="your-api-token",
+        ...     account_id="your-account-id",
+        ...     uuid="your-custom-uuid"
+        ... )
+        >>> 
+        >>> # 使用代理 IP
+        >>> workers = cfspider.make_workers(
+        ...     api_token="your-api-token",
+        ...     account_id="your-account-id",
+        ...     proxyip="proxyip.fxxk.dedyn.io"
+        ... )
+        >>> 
+        >>> # 使用完整环境变量
+        >>> workers = cfspider.make_workers(
+        ...     api_token="your-api-token",
+        ...     account_id="your-account-id",
+        ...     env_vars={
+        ...         "UUID": "your-uuid",
+        ...         "PROXYIP": "1.2.3.4",
+        ...         "SOCKS5": "user:pass@host:port"
+        ...     }
         ... )
         >>> 
         >>> # 直接用于请求
@@ -429,9 +533,6 @@ def make_workers(
         ...     uuid=workers.uuid
         ... )
         >>> 
-        >>> # 或者获取 URL 字符串
-        >>> print(workers.url)
-        >>> 
         >>> # 停止健康检查
         >>> workers.stop()
     
@@ -439,12 +540,24 @@ def make_workers(
         - Account: Workers Scripts: Edit
         - Zone: Workers Routes: Edit (可选，用于自定义域名)
     """
+    # 合并环境变量
+    final_env_vars = env_vars.copy() if env_vars else {}
+    
+    # 处理快捷参数
+    if uuid:
+        final_env_vars['UUID'] = uuid
+    if proxyip:
+        final_env_vars['PROXYIP'] = proxyip
+    if socks5:
+        final_env_vars['SOCKS5'] = socks5
+    
     return WorkersManager(
         api_token=api_token,
         account_id=account_id,
         worker_name=worker_name,
         auto_recreate=auto_recreate,
-        check_interval=check_interval
+        check_interval=check_interval,
+        env_vars=final_env_vars if final_env_vars else None
     )
 
 
