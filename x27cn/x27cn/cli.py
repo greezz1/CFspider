@@ -7,6 +7,8 @@ X27CN 命令行工具
     x27cn obfuscate <file> [output] [--key=密钥]
     x27cn minify <file> [output] [--no-mangle] [--no-node]
     x27cn flatten <file> [output] [--intensity=2] [--safe]
+    x27cn protect <file> [output] [--level=2] [--anti-crawl]    # 一键保护
+    x27cn anti-debug                                             # 生成反调试代码
     x27cn password hash <password>
     x27cn password verify <password> <hash>
     x27cn password generate [--length=16]
@@ -22,6 +24,8 @@ from .password import (
     hash_password, verify_password, generate_password,
     check_password_strength, encrypt_with_password, decrypt_with_password
 )
+from .anti_crawl import generate_full_protection, generate_anti_debug, generate_disable_shortcuts
+from .advanced import full_obfuscate, obfuscate_file_full, quick_protect
 
 
 def main():
@@ -29,7 +33,7 @@ def main():
         prog='x27cn',
         description='X27CN 代码混淆加密工具'
     )
-    parser.add_argument('--version', action='version', version='x27cn 1.3.0')
+    parser.add_argument('--version', action='version', version='x27cn 1.4.0')
     
     subparsers = parser.add_subparsers(dest='command', help='命令')
     
@@ -71,6 +75,25 @@ def main():
     flat_parser.add_argument('--intensity', '-i', type=int, default=2, choices=[1, 2, 3], 
                             help='扁平化强度 (1=轻, 2=中, 3=强)')
     flat_parser.add_argument('--safe', '-s', action='store_true', help='使用安全模式（更保守）')
+    
+    # protect 命令（一键保护）
+    prot_parser = subparsers.add_parser('protect', help='一键完整保护（混淆+反爬+反调试）')
+    prot_parser.add_argument('input', help='输入文件 (.html/.js/.css)')
+    prot_parser.add_argument('output', nargs='?', help='输出文件（可选）')
+    prot_parser.add_argument('--key', '-k', default=DEFAULT_KEY, help='加密密钥')
+    prot_parser.add_argument('--level', '-l', type=int, default=2, choices=[1, 2, 3],
+                            help='保护级别 (1=基础, 2=中等, 3=高级)')
+    prot_parser.add_argument('--no-anti-crawl', action='store_true', help='不添加反爬保护')
+    prot_parser.add_argument('--domain', '-d', action='append', help='域名锁定（可多次指定）')
+    prot_parser.add_argument('--expire', help='过期日期 (YYYY-MM-DD)')
+    
+    # anti-debug 命令
+    anti_parser = subparsers.add_parser('anti-debug', help='生成反调试保护代码')
+    anti_parser.add_argument('--output', '-o', help='输出文件（可选）')
+    anti_parser.add_argument('--disable-shortcuts', '-s', action='store_true', help='包含禁用快捷键')
+    anti_parser.add_argument('--console-clear', '-c', action='store_true', help='包含控制台清除')
+    anti_parser.add_argument('--domain', '-d', action='append', help='域名锁定')
+    anti_parser.add_argument('--expire', help='过期日期')
     
     # password 命令
     pwd_parser = subparsers.add_parser('password', help='密码工具')
@@ -187,6 +210,32 @@ def main():
             with open(output_path, 'w', encoding='utf-8') as f:
                 f.write(result)
             print(f'控制流扁平化完成: {output_path}')
+        
+        elif args.command == 'protect':
+            output = obfuscate_file_full(
+                args.input,
+                args.output,
+                key=args.key,
+                level=args.level,
+                anti_crawl=not args.no_anti_crawl
+            )
+            level_names = {1: '基础', 2: '中等', 3: '高级'}
+            print(f'保护完成 (级别: {level_names[args.level]}): {output}')
+        
+        elif args.command == 'anti-debug':
+            code = generate_full_protection(
+                anti_debug=True,
+                disable_shortcuts=args.disable_shortcuts,
+                console_clear=args.console_clear,
+                domain_lock=args.domain,
+                expire_date=args.expire
+            )
+            if args.output:
+                with open(args.output, 'w', encoding='utf-8') as f:
+                    f.write(code)
+                print(f'反调试代码已生成: {args.output}')
+            else:
+                print(code)
         
         elif args.command == 'password':
             if args.pwd_command == 'hash':

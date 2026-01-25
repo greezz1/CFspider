@@ -68,7 +68,26 @@ from .password import (
     sha512,
 )
 
-__version__ = '1.3.0'
+from .anti_crawl import (
+    generate_anti_debug,
+    generate_disable_shortcuts,
+    generate_console_clear,
+    generate_code_integrity_check,
+    generate_domain_lock,
+    generate_time_bomb,
+    generate_full_protection,
+    inject_protection,
+)
+
+from .advanced import (
+    encrypt_strings,
+    advanced_obfuscate,
+    full_obfuscate,
+    obfuscate_file_full,
+    quick_protect,
+)
+
+__version__ = '1.4.0'
 __author__ = 'CFspider'
 __all__ = [
     # 核心加密
@@ -111,5 +130,20 @@ __all__ = [
     'md5',
     'sha256',
     'sha512',
+    # 反爬虫保护
+    'generate_anti_debug',
+    'generate_disable_shortcuts',
+    'generate_console_clear',
+    'generate_code_integrity_check',
+    'generate_domain_lock',
+    'generate_time_bomb',
+    'generate_full_protection',
+    'inject_protection',
+    # 高级混淆（一键式）
+    'encrypt_strings',
+    'advanced_obfuscate',
+    'full_obfuscate',
+    'obfuscate_file_full',
+    'quick_protect',
 ]
 

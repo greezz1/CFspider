@@ -352,6 +352,120 @@ x27cn encrypt secret.txt --password="mypassword"
 x27cn decrypt secret.txt.enc --password="mypassword"
 ```
 
+## 反爬虫保护（v1.4.0 新增）
+
+X27CN 现在提供一键式代码保护，包含反调试、反爬虫、域名锁定等功能。
+
+### 一键保护（推荐）
+
+```python
+import x27cn
+
+# 一键完整保护（混淆 + 反爬）
+protected = x27cn.full_obfuscate(js_code, level=2)
+
+# 保护级别：
+# level=1: 基础 - 压缩 + 变量重命名
+# level=2: 中等 - 基础 + 字符串加密 + 死代码
+# level=3: 高级 - 中等 + 反调试 + 禁用快捷键
+
+# 快速保护（一行代码）
+protected = x27cn.quick_protect(js_code)
+
+# 保护文件
+x27cn.obfuscate_file_full('app.js', level=3, anti_crawl=True)
+```
+
+### 反调试保护
+
+```python
+import x27cn
+
+# 生成反调试代码（无限 debugger + 时间检测 + 控制台检测）
+anti_debug = x27cn.generate_anti_debug()
+
+# 生成禁用快捷键代码（F12, Ctrl+Shift+I, 右键等）
+disable_shortcuts = x27cn.generate_disable_shortcuts()
+
+# 控制台清除和警告
+console_clear = x27cn.generate_console_clear()
+
+# 组合完整保护
+protection = x27cn.generate_full_protection(
+    anti_debug=True,
+    disable_shortcuts=True,
+    console_clear=True
+)
+
+# 注入保护到代码
+protected_code = x27cn.inject_protection(js_code, anti_debug=True)
+```
+
+### 域名锁定
+
+```python
+# 限制代码只能在指定域名运行
+domain_lock = x27cn.generate_domain_lock(['example.com', 'test.com'])
+
+# 或使用 full_obfuscate
+protected = x27cn.full_obfuscate(js_code, domain_lock=['example.com'])
+```
+
+### 时间限制（许可证过期）
+
+```python
+# 代码在指定日期后失效
+time_bomb = x27cn.generate_time_bomb('2025-12-31')
+```
+
+### 命令行
+
+```bash
+# 一键保护（推荐）
+x27cn protect app.js
+
+# 指定保护级别
+x27cn protect app.js --level=3
+
+# 域名锁定
+x27cn protect app.js --domain=example.com --domain=test.com
+
+# 设置过期日期
+x27cn protect app.js --expire=2025-12-31
+
+# 不添加反爬
+x27cn protect app.js --no-anti-crawl
+
+# 仅生成反调试代码
+x27cn anti-debug
+
+# 生成带禁用快捷键的反调试代码
+x27cn anti-debug --disable-shortcuts --console-clear
+```
+
+### 保护效果
+
+**原始代码:**
+```javascript
+function getSecret() {
+    return "API_KEY_12345";
+}
+```
+
+**level=3 保护后:**
+```javascript
+(function(){var _$a=function(){var _$b=new Date().getTime();debugger;...})();
+var _$k=[120,50,...];var _$a=[[65,83,...]];var _$s=function(i){...};
+var _$0=function(){return _$s(0)};...
+```
+
+反调试特性：
+- 无限 debugger 断点
+- 检测 DevTools 打开
+- 时间检测（调试暂停时触发）
+- 禁用 F12 / Ctrl+Shift+I / 右键
+- 控制台定期清除
+
 ## 安全说明
 
 X27CN 提供两种安全级别：
@@ -398,6 +512,14 @@ X27CN 提供两种安全级别：
 | `encrypt_with_password(data, pwd)` | 密码加密数据 |
 | `decrypt_with_password(data, pwd)` | 密码解密数据 |
 | `md5(text)` / `sha256(text)` | 快速哈希 |
+| `full_obfuscate(code, level)` | 一键完整混淆 |
+| `quick_protect(code)` | 快速保护代码 |
+| `obfuscate_file_full(path, level)` | 一键保护文件 |
+| `generate_anti_debug()` | 生成反调试代码 |
+| `generate_disable_shortcuts()` | 生成禁用快捷键代码 |
+| `generate_domain_lock(domains)` | 生成域名锁定代码 |
+| `generate_time_bomb(date)` | 生成时间限制代码 |
+| `inject_protection(code, ...)` | 注入保护到代码 |
 
 ## License
 
