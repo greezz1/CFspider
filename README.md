@@ -961,6 +961,24 @@ workers.stop()
 | `ACCESSKEY` | `accesskey` | 访问密钥（破皮版 /x2727admin 用） |
 | `TWO_PROXY` | `two_proxy` | 双层代理（格式: host:port:user:pass） |
 
+**自定义域名：**
+| 参数 | 说明 |
+|------|------|
+| `my_domain` | 自定义域名（如 `proxy.example.com`），域名需已在 Cloudflare 托管 |
+
+```python
+# 使用自定义域名
+workers = cfspider.make_workers(
+    api_token="your-token",
+    account_id="your-account-id",
+    my_domain="proxy.example.com"  # 自动配置自定义域名
+)
+
+print(workers.url)            # https://proxy.example.com（自定义域名）
+print(workers.workers_dev_url) # https://xxx.workers.dev（workers.dev 地址）
+print(workers.custom_url)      # https://proxy.example.com（自定义域名）
+```
+
 ### 浏览器模式
 
 ```python

@@ -83,7 +83,8 @@ class WorkersManager:
         worker_name: Optional[str] = None,
         auto_recreate: bool = True,
         check_interval: int = 60,
-        env_vars: Optional[dict] = None
+        env_vars: Optional[dict] = None,
+        my_domain: Optional[str] = None
     ):
         """
         初始化 Workers 管理器
@@ -108,8 +109,10 @@ class WorkersManager:
         self.auto_recreate = auto_recreate
         self.check_interval = check_interval
         self.env_vars = env_vars or {}
+        self.my_domain = my_domain
         
         self._url: Optional[str] = None
+        self._custom_url: Optional[str] = None
         self._uuid: Optional[str] = None
         self._healthy = False
         self._check_thread: Optional[threading.Thread] = None
@@ -121,6 +124,10 @@ class WorkersManager:
         
         # 创建 Workers
         self._create_worker()
+        
+        # 配置自定义域名
+        if my_domain and self._healthy:
+            self._setup_custom_domain(my_domain)
         
         # 启动健康检查
         if auto_recreate:
@@ -217,6 +224,92 @@ class WorkersManager:
                 
         except Exception as e:
             print(f"[CFspider] 创建 Workers 异常: {e}")
+        
+        return False
+    
+    def _get_zone_id(self, domain: str) -> Optional[str]:
+        """根据域名获取 Zone ID"""
+        # 提取根域名（如 proxy.example.com -> example.com）
+        parts = domain.split('.')
+        if len(parts) >= 2:
+            root_domain = '.'.join(parts[-2:])
+        else:
+            root_domain = domain
+        
+        try:
+            api_url = f"https://api.cloudflare.com/client/v4/zones?name={root_domain}"
+            response = requests.get(
+                api_url,
+                headers={"Authorization": f"Bearer {self.api_token}"},
+                timeout=10
+            )
+            if response.ok:
+                result = response.json()
+                if result.get("success") and result.get("result"):
+                    return result["result"][0].get("id")
+        except:
+            pass
+        return None
+    
+    def _setup_custom_domain(self, domain: str) -> bool:
+        """配置自定义域名"""
+        # 获取 Zone ID
+        zone_id = self._get_zone_id(domain)
+        if not zone_id:
+            print(f"[CFspider] 无法找到域名 {domain} 的 Zone，请确保域名已添加到 Cloudflare")
+            return False
+        
+        try:
+            # 使用 Custom Domains API（推荐）
+            api_url = f"https://api.cloudflare.com/client/v4/accounts/{self.account_id}/workers/domains"
+            response = requests.put(
+                api_url,
+                headers={
+                    "Authorization": f"Bearer {self.api_token}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "hostname": domain,
+                    "zone_id": zone_id,
+                    "service": self.worker_name,
+                    "environment": "production"
+                },
+                timeout=30
+            )
+            
+            if response.ok:
+                result = response.json()
+                if result.get("success"):
+                    self._custom_url = f"https://{domain}"
+                    print(f"[CFspider] 自定义域名配置成功: {self._custom_url}")
+                    return True
+            
+            # 如果 Custom Domains 失败，尝试使用 Workers Routes
+            api_url = f"https://api.cloudflare.com/client/v4/zones/{zone_id}/workers/routes"
+            response = requests.post(
+                api_url,
+                headers={
+                    "Authorization": f"Bearer {self.api_token}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "pattern": f"{domain}/*",
+                    "script": self.worker_name
+                },
+                timeout=30
+            )
+            
+            if response.ok:
+                result = response.json()
+                if result.get("success"):
+                    self._custom_url = f"https://{domain}"
+                    print(f"[CFspider] 自定义域名路由配置成功: {self._custom_url}")
+                    return True
+                    
+            print(f"[CFspider] 自定义域名配置失败: {response.text[:200]}")
+            
+        except Exception as e:
+            print(f"[CFspider] 自定义域名配置异常: {e}")
         
         return False
     
@@ -333,8 +426,18 @@ class WorkersManager:
     
     @property
     def url(self) -> Optional[str]:
-        """获取 Workers URL"""
+        """获取 Workers URL（优先返回自定义域名）"""
+        return self._custom_url or self._url
+    
+    @property
+    def workers_dev_url(self) -> Optional[str]:
+        """获取 workers.dev URL"""
         return self._url
+    
+    @property
+    def custom_url(self) -> Optional[str]:
+        """获取自定义域名 URL"""
+        return self._custom_url
     
     @property
     def uuid(self) -> Optional[str]:
@@ -372,7 +475,9 @@ def make_workers(
     host: Optional[str] = None,
     key: Optional[str] = None,
     accesskey: Optional[str] = None,
-    two_proxy: Optional[str] = None
+    two_proxy: Optional[str] = None,
+    # 自定义域名
+    my_domain: Optional[str] = None
 ) -> WorkersManager:
     """
     创建 Cloudflare Workers 并返回管理器
@@ -400,6 +505,7 @@ def make_workers(
         key: 加密密钥
         accesskey: 访问密钥（破皮版用）
         two_proxy: 双层代理地址（格式: host:port:user:pass）
+        my_domain: 自定义域名（如 proxy.example.com，域名需已在 Cloudflare）
     
     Returns:
         WorkersManager: Workers 管理器，可直接用于 cf_proxies
@@ -477,7 +583,8 @@ def make_workers(
         worker_name=worker_name,
         auto_recreate=auto_recreate,
         check_interval=check_interval,
-        env_vars=final_env_vars if final_env_vars else None
+        env_vars=final_env_vars if final_env_vars else None,
+        my_domain=my_domain
     )
 
 
