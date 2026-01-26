@@ -93,6 +93,9 @@ from .batch import batch, abatch, BatchResult, BatchItem
 # 数据导出
 from .export import export
 
+# 数据处理模块
+from .data import DataFrame, read, read_csv, read_json, read_excel
+
 # 本地代理服务器（支持双层代理）
 from .proxy_server import (
     generate_vless_link,
@@ -281,4 +284,6 @@ __all__ = [
     "generate_vless_link", "start_proxy_server", "TwoProxyServer",
     # Workers 管理器
     "make_workers", "list_workers", "delete_workers", "WorkersManager",
+    # 数据处理
+    "DataFrame", "read", "read_csv", "read_json", "read_excel",
 ]
