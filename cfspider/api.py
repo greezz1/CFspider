@@ -473,16 +473,30 @@ def request(method, url, cf_proxies=None, uuid=None, http2=False, impersonate=No
         from .stealth import random_delay
         random_delay(delay[0], delay[1])
     
-    # 如果指定了 cf_proxies，使用 VLESS 代理
+    # 如果指定了 cf_proxies，自动检测 Workers 类型
     if cf_proxies:
-        return _request_vless(
-            method, url, cf_proxies, uuid,
-            http2=http2, impersonate=impersonate,
-            map_output=map_output, map_file=map_file,
-            stealth=stealth, stealth_browser=stealth_browser,
-            static_ip=static_ip, two_proxy=two_proxy,
-            **kwargs
-        )
+        # 检测是否为爬楼梯 Workers（HTTP 代理模式）
+        workers_type = _detect_workers_type(cf_proxies)
+        
+        if workers_type == 'http':
+            # 使用爬楼梯 Workers HTTP 代理
+            return _request_http_proxy(
+                method, url, cf_proxies,
+                http2=http2, impersonate=impersonate,
+                map_output=map_output, map_file=map_file,
+                stealth=stealth, stealth_browser=stealth_browser,
+                **kwargs
+            )
+        else:
+            # 使用 VLESS Workers 代理
+            return _request_vless(
+                method, url, cf_proxies, uuid,
+                http2=http2, impersonate=impersonate,
+                map_output=map_output, map_file=map_file,
+                stealth=stealth, stealth_browser=stealth_browser,
+                static_ip=static_ip, two_proxy=two_proxy,
+                **kwargs
+            )
     
     # 没有指定代理，直接请求
     params = kwargs.pop("params", None)
@@ -578,6 +592,143 @@ def _handle_map_output(response, url, start_time, map_output, map_file):
     
     # 生成地图 HTML
     ip_map.generate_map_html(output_file=map_file)
+
+
+def _detect_workers_type(cf_proxies):
+    """
+    自动检测 Workers 类型
+    
+    通过访问 /health 端点来判断是爬楼梯 Workers（HTTP代理）还是 VLESS Workers
+    
+    Returns:
+        'http': 爬楼梯 Workers（HTTP 代理模式）
+        'vless': VLESS Workers
+    """
+    # 解析地址
+    if not cf_proxies.startswith('http'):
+        cf_proxies = f'https://{cf_proxies}'
+    cf_proxies = cf_proxies.rstrip('/')
+    
+    try:
+        # 尝试访问 /health 端点（爬楼梯 Workers 特有）
+        response = requests.get(f'{cf_proxies}/health', timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            if 'status' in data and data.get('status') == 'ok':
+                return 'http'
+    except:
+        pass
+    
+    try:
+        # 尝试访问 /proxy 端点（爬楼梯 Workers 特有）
+        response = requests.get(f'{cf_proxies}/proxy', timeout=5)
+        if response.status_code == 400:  # Missing url parameter
+            data = response.json()
+            if 'error' in data and 'url' in data.get('error', '').lower():
+                return 'http'
+    except:
+        pass
+    
+    # 默认使用 VLESS
+    return 'vless'
+
+
+def _request_http_proxy(method, url, http_proxy,
+                        http2=False, impersonate=None,
+                        map_output=False, map_file="cfspider_map.html",
+                        stealth=False, stealth_browser='chrome', **kwargs):
+    """
+    使用爬楼梯 Workers HTTP 代理发送请求
+    
+    这是一个简单的 HTTP 代理模式，不使用 VLESS 协议，
+    适合不需要隐藏 Cloudflare 特征的普通爬虫场景。
+    
+    Args:
+        method: HTTP 方法
+        url: 目标 URL
+        http_proxy: 爬楼梯 Workers 地址
+        其他参数与 request() 相同
+    """
+    start_time = time.time()
+    
+    # 解析代理地址
+    if not http_proxy.startswith('http'):
+        http_proxy = f'https://{http_proxy}'
+    
+    # 移除末尾斜杠
+    http_proxy = http_proxy.rstrip('/')
+    
+    # 构建代理请求
+    proxy_url = f'{http_proxy}/proxy'
+    
+    # 准备请求头
+    headers = kwargs.pop('headers', {})
+    
+    # 如果启用隐身模式，添加完整的浏览器请求头
+    if stealth:
+        from .stealth import get_stealth_headers
+        stealth_headers = get_stealth_headers(stealth_browser)
+        final_headers = stealth_headers.copy()
+        final_headers.update(headers)
+        headers = final_headers
+    
+    # 准备请求数据
+    data = kwargs.pop('data', None)
+    json_data = kwargs.pop('json', None)
+    params = kwargs.pop('params', None)
+    cookies = kwargs.pop('cookies', None)
+    timeout = kwargs.pop('timeout', 30)
+    token = kwargs.pop('token', None)
+    
+    # 构建代理请求体
+    proxy_body = {
+        'url': url,
+        'method': method.upper(),
+        'headers': headers,
+    }
+    
+    # 添加请求体
+    if data:
+        proxy_body['body'] = data
+    elif json_data:
+        import json
+        proxy_body['body'] = json.dumps(json_data)
+        if 'Content-Type' not in headers:
+            proxy_body['headers']['Content-Type'] = 'application/json'
+    
+    # 添加查询参数到 URL
+    if params:
+        from urllib.parse import urlencode, urlparse, urlunparse, parse_qs
+        parsed = urlparse(url)
+        existing_params = parse_qs(parsed.query)
+        existing_params.update(params if isinstance(params, dict) else dict(params))
+        new_query = urlencode(existing_params, doseq=True)
+        proxy_body['url'] = urlunparse(parsed._replace(query=new_query))
+    
+    # 添加 Cookie
+    if cookies:
+        cookie_str = '; '.join([f'{k}={v}' for k, v in cookies.items()])
+        proxy_body['headers']['Cookie'] = cookie_str
+    
+    # 准备代理请求头
+    proxy_headers = {'Content-Type': 'application/json'}
+    if token:
+        proxy_headers['Authorization'] = f'Bearer {token}'
+    
+    # 发送代理请求
+    import json
+    response = requests.post(
+        proxy_url,
+        json=proxy_body,
+        headers=proxy_headers,
+        timeout=timeout,
+        **kwargs
+    )
+    
+    # 包装响应
+    resp = CFSpiderResponse(response)
+    _handle_map_output(resp, url, start_time, map_output, map_file)
+    return resp
 
 
 # VLESS 本地代理缓存
@@ -880,19 +1031,19 @@ def get(url, cf_proxies=None, uuid=None, http2=False, impersonate=None,
         url: 目标 URL（必须包含协议，如 https://）
         
         cf_proxies: CFspider Workers 地址（可选）
-            如 "https://cfspider.violetqqcom.workers.dev"
-            不填写时直接请求，不使用代理
+            自动检测 Workers 类型：
+            - 爬楼梯 Workers: HTTP 代理模式，无敏感特征，适合爬虫
+            - VLESS Workers: 隐藏 Cloudflare 特征，适合代理软件
         
-        uuid: VLESS UUID（可选）
+        uuid: VLESS UUID（可选，仅 VLESS 模式）
             不填写会自动从 Workers 获取
         
         static_ip: 是否使用固定 IP（默认 False）
             - False: 每次请求获取新的出口 IP（适合大规模采集）
             - True: 保持使用同一个 IP（适合需要会话一致性的场景）
         
-        two_proxy: 第二层代理（可选）
+        two_proxy: 第二层代理（可选，仅 VLESS 模式）
             格式: "host:port:user:pass" 或 "host:port"
-            例如: "us.cliproxy.io:3010:username:password"
             流程: 本地 → Workers (VLESS) → 第二层代理 → 目标网站
         
         http2: 是否启用 HTTP/2 协议（默认 False）
@@ -916,17 +1067,16 @@ def get(url, cf_proxies=None, uuid=None, http2=False, impersonate=None,
         CFSpiderResponse: 响应对象
     
     Example:
-        >>> # 动态 IP（默认，每次请求换 IP）
+        >>> # 使用爬楼梯 Workers（自动检测，HTTP 代理模式）
         >>> response = cfspider.get(
         ...     "https://httpbin.org/ip",
-        ...     cf_proxies="https://cfspider.violetqqcom.workers.dev"
+        ...     cf_proxies="https://my-proxy.workers.dev"
         ... )
         >>> 
-        >>> # 使用第二层代理（通过 Workers 连接到日本代理）
+        >>> # 使用 VLESS Workers（自动检测）
         >>> response = cfspider.get(
         ...     "https://httpbin.org/ip",
-        ...     cf_proxies="https://cfspider.violetqqcom.workers.dev",
-        ...     two_proxy="us.cliproxy.io:3010:username:password"
+        ...     cf_proxies="https://cfspider.workers.dev"
         ... )
     """
     return request("GET", url, cf_proxies=cf_proxies, uuid=uuid, 

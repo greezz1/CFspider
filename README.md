@@ -4,21 +4,38 @@
 [![Python](https://img.shields.io/pypi/pyversions/cfspider)](https://pypi.org/project/cfspider/)
 [![License](https://img.shields.io/github/license/violettoolssite/CFspider)](LICENSE)
 
-**v1.8.9** - 基于 VLESS 协议的免费代理 IP 池，利用 Cloudflare 全球 300+ 边缘节点作为出口，**完全隐藏 CF 特征**，支持隐身模式、TLS 指纹模拟、网页镜像和浏览器自动化。
+**v1.9.0** - 基于 Cloudflare Workers 的免费代理 IP 池，支持 **VLESS 协议**（完全隐藏特征）和 **HTTP 代理**（轻量爬虫），利用全球 300+ 边缘节点作为出口，支持隐身模式、TLS 指纹模拟、网页镜像和浏览器自动化。
 
 ---
 
-## v1.8.9 重大更新：一键自动部署 Workers
+## v1.9.0 重大更新：双模式 Workers + 一键自动部署
 
 > **无需手动部署！** 只需 API Token 和 Account ID，即可自动创建、部署和管理 Cloudflare Workers。
+> 
+> **新增双模式选择：** VLESS 模式（完全隐藏特征）或 HTTP 模式（轻量爬虫）
 
 ```python
 import cfspider
 
-# 一行代码，自动部署破皮版 Workers
+# 方式 1：运行时交互式选择模式
 workers = cfspider.make_workers(
     api_token="your-api-token",
     account_id="your-account-id"
+)
+# 运行后弹出选择菜单：[1] VLESS模式  [2] HTTP模式
+
+# 方式 2：代码中指定 VLESS 模式（代理软件推荐）
+workers = cfspider.make_workers(
+    api_token="your-api-token",
+    account_id="your-account-id",
+    mode='vless'  # 完全隐藏 CF 特征
+)
+
+# 方式 3：代码中指定 HTTP 模式（爬虫推荐）
+workers = cfspider.make_workers(
+    api_token="your-api-token",
+    account_id="your-account-id",
+    mode='http'  # 轻量快速，随机 UA/Referer
 )
 
 # 直接使用代理
@@ -30,9 +47,9 @@ print(response.json())  # 显示 Cloudflare IP
 
 | 功能 | 说明 |
 |------|------|
+| **双模式选择** | VLESS（隐藏特征）或 HTTP（轻量爬虫），运行时选择或代码指定 |
 | **一键部署** | 自动创建 Workers，无需手动复制代码 |
-| **破皮版内置** | 自动部署带 Nginx 伪装的反检测版本 |
-| **自动重建** | Workers 失效时自动重新创建（可配置） |
+| **自动重建** | Workers 失效时自动重新创建（保持相同模式） |
 | **环境变量** | 支持 UUID、PROXYIP、KEY 等配置 |
 | **自定义域名** | 支持 `my_domain` 参数自动配置域名 |
 
@@ -147,21 +164,87 @@ print(workers.custom_url)     # 自定义域名 URL
 
 > 使用 X27CN 在线工具解密破皮版加密数据，获取 VLESS 链接的完整流程演示
 
-### Workers 版本对比
+### Workers 双模式（v1.9.0 新增）
+
+CFspider 现支持两种 Workers 模式，可通过 `mode` 参数选择：
+
+| 模式 | 文件 | 特点 | CF特征头 | 适用场景 |
+|------|------|------|----------|----------|
+| **VLESS 模式** | `破皮版workers.js` | 完整代理功能 | **完全隐藏** | V2Ray/Clash 代理软件、敏感网站 |
+| **HTTP 模式** | `爬楼梯workers.js` | 轻量 HTTP 代理 | 会暴露 | 普通网页爬虫、不严格检测的网站 |
+
+**自动部署时选择模式：**
+
+```python
+import cfspider
+
+# 方式 1：运行时交互式选择（推荐新手）
+workers = cfspider.make_workers(
+    api_token="your-api-token",
+    account_id="your-account-id"
+)
+# 运行后会弹出菜单：
+# [1] VLESS 模式 (推荐)
+# [2] HTTP 模式 (轻量)
+
+# 方式 2：代码中直接指定 VLESS 模式
+workers = cfspider.make_workers(
+    api_token="your-api-token",
+    account_id="your-account-id",
+    mode='vless'  # 破皮版，完全隐藏 CF 特征
+)
+
+# 方式 3：代码中直接指定 HTTP 模式
+workers = cfspider.make_workers(
+    api_token="your-api-token",
+    account_id="your-account-id",
+    mode='http'  # 爬楼梯版，轻量爬虫
+)
+```
+
+**模式详细对比：**
+
+| 特性 | VLESS 模式 | HTTP 模式 |
+|------|-----------|-----------|
+| Workers 文件 | `破皮版workers.js` | `爬楼梯workers.js` |
+| Cloudflare 特征头 | 完全隐藏 | 暴露（Cf-Ray、Cf-Worker 等） |
+| 代理软件支持 | 是（V2Ray、Clash） | 否 |
+| 需要 UUID | 是（自动获取或手动指定） | 否 |
+| 随机 User-Agent | 取决于客户端 | 是（35+ 浏览器） |
+| 随机 Referer | 否 | 是（13+ 来源） |
+| 随机 Accept-Language | 否 | 是（23+ 语言） |
+| 首页伪装 | Nginx 页面 | 简洁状态页 |
+| 检测风险 | 低 | 中（目标网站可识别来自 CF Workers） |
+| 复杂度 | 需要 UUID | 简单 |
+| 推荐场景 | 代理软件、严格检测网站 | 普通爬虫、快速测试 |
+
+**安全提醒：** 无论选择哪种模式，都**强烈建议使用 Cloudflare 小号**部署！
+
+### Workers 版本对比（手动部署）
 
 | 版本 | 文件名 | 首页 | API入口 | 数据加密 | 密钥验证 | 适用场景 |
 |------|--------|------|---------|----------|----------|----------|
-| **标准版** | `workers/workers.js` | 配置页面 | `/api/*` | 无 | 无 | 开发测试、快速部署 |
-| **破皮版** | `workers/破皮版workers.js` | Nginx伪装 | `/x2727admin` | X27CN加密 | 需要密钥 | 生产环境、反检测 |
-| **明文版** | `workers/破皮版workers_明文.js` | Nginx伪装 | `/x2727admin` | X27CN加密 | 需要密钥 | 调试参考、学习代码 |
-| **超明文版** | `workers/破皮版workers_超明文.js` | Nginx伪装 | `/admin` | **无加密** | **无需密钥** | 快速测试、内网使用 |
+| **爬楼梯版** | `workers/爬楼梯workers.js` | 状态页 | `/proxy` `/batch` | 无 | 可选TOKEN | **普通爬虫（推荐）** |
+| **破皮版** | `workers/破皮版workers.js` | Nginx伪装 | `/x2727admin` | X27CN加密 | 需要密钥 | **代理软件（推荐）** |
+| **标准版** | `workers/workers.js` | 配置页面 | `/api/*` | 无 | 无 | 开发测试 |
+| **明文版** | `workers/破皮版workers_明文.js` | Nginx伪装 | `/x2727admin` | X27CN加密 | 需要密钥 | 代码学习 |
+| **超明文版** | `workers/破皮版workers_超明文.js` | Nginx伪装 | `/admin` | 无 | 无 | 快速测试 |
 
 **版本选择建议：**
 
+- **普通爬虫**：使用 `workers/爬楼梯workers.js`，轻量快速，随机 UA/Referer
+- **代理软件**：使用 `workers/破皮版workers.js`，VLESS 协议，隐藏 CF 特征
 - **开发测试**：使用 `workers/workers.js` 标准版，配置页面方便调试
-- **生产部署**：使用 `workers/破皮版workers.js`，混淆代码 + 加密响应，降低被检测风险
-- **内网/私有环境**：使用 `workers/破皮版workers_超明文.js`，无加密、无密钥，直接返回JSON
-- **代码学习**：参考 `workers/破皮版workers_明文.js`，可读的完整代码实现
+- **代码学习**：参考 `workers/破皮版workers_明文.js`，可读的完整代码
+
+**爬楼梯版路由：**
+```
+/           → 状态页
+/proxy?url=TARGET → 代理请求
+/batch      → 批量请求（POST JSON）
+/ip         → 查看出口 IP
+/health     → 健康检查
+```
 
 **超明文版路由：**
 ```

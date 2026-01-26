@@ -42,29 +42,80 @@ from typing import Optional
 from pathlib import Path
 
 
-def _get_workers_script() -> str:
-    """获取破皮版 Workers 代码"""
-    # 尝试多个可能的路径（按优先级）
-    possible_paths = [
-        # 1. pip 安装后的路径（在 cfspider 包内）
-        Path(__file__).parent / "workers" / "破皮版workers.js",
-        # 2. 项目根目录的 workers 文件夹
-        Path(__file__).parent.parent / "workers" / "破皮版workers.js",
-        # 3. 当前工作目录
-        Path("workers") / "破皮版workers.js",
-        Path("破皮版workers.js"),
-    ]
+def _get_workers_script(mode: str = 'vless') -> str:
+    """
+    获取 Workers 代码
+    
+    Args:
+        mode: 'vless' 或 'http'
+            - vless: 破皮版 VLESS Workers（支持代理软件，完全隐藏 CF 特征）
+            - http: 爬楼梯 Workers（轻量 HTTP 代理，适合普通爬虫）
+    """
+    if mode == 'http':
+        # HTTP 代理模式 - 爬楼梯 Workers
+        possible_paths = [
+            Path(__file__).parent / "workers" / "爬楼梯workers.js",
+            Path(__file__).parent.parent / "workers" / "爬楼梯workers.js",
+            Path("workers") / "爬楼梯workers.js",
+            Path("爬楼梯workers.js"),
+        ]
+        fallback = _FALLBACK_HTTP_SCRIPT
+    else:
+        # VLESS 模式 - 破皮版 Workers
+        possible_paths = [
+            Path(__file__).parent / "workers" / "破皮版workers.js",
+            Path(__file__).parent.parent / "workers" / "破皮版workers.js",
+            Path("workers") / "破皮版workers.js",
+            Path("破皮版workers.js"),
+        ]
+        fallback = _FALLBACK_VLESS_SCRIPT
     
     for path in possible_paths:
         if path.exists():
             return path.read_text(encoding='utf-8')
     
     # 如果找不到文件，使用内嵌的简化版本
-    return _FALLBACK_SCRIPT
+    return fallback
 
 
-# 备用简化版脚本（当找不到破皮版时使用）
-_FALLBACK_SCRIPT = '''import{connect}from"cloudflare:sockets";const UUID=crypto.randomUUID();export default{async fetch(e,t){const n=new URL(e.url),s=t.UUID||UUID;if("/"===n.pathname||"/api/config"===n.pathname)return new Response(JSON.stringify({host:n.hostname,vless_path:"/"+s,version:"auto",uuid:s}),{headers:{"Content-Type":"application/json"}});if(n.pathname==="/"+s&&"websocket"===e.headers.get("Upgrade")){const[t,n]=Object.values(new WebSocketPair);return n.accept(),new Response(null,{status:101,webSocket:t})}return"/proxy"===n.pathname?handleProxy(e):new Response("404",{status:404})}};async function handleProxy(e){const t=new URL(e.url).searchParams.get("url");if(!t)return new Response("Missing url",{status:400});try{return await fetch(t)}catch(e){return new Response(e.message,{status:500})}}'''
+def _select_mode_interactive() -> str:
+    """交互式选择部署模式"""
+    print("\n" + "=" * 50)
+    print("请选择 Workers 部署模式:")
+    print("=" * 50)
+    print("\n  [1] VLESS 模式 (推荐)")
+    print("      - 支持 V2Ray/Clash 等代理软件")
+    print("      - 完全隐藏 Cloudflare 特征头")
+    print("      - 适合需要完整代理功能的场景")
+    print("      - 使用 Nginx 伪装首页")
+    print("\n  [2] HTTP 模式 (轻量)")
+    print("      - 轻量级 HTTP 代理")
+    print("      - 适合普通网页爬虫")
+    print("      - 随机 User-Agent/Referer")
+    print("      - 注意：会暴露 Cloudflare 特征头")
+    print("\n" + "-" * 50)
+    
+    while True:
+        try:
+            choice = input("请输入选项 [1/2] (默认 1): ").strip()
+            if choice == "" or choice == "1":
+                print("\n已选择: VLESS 模式\n")
+                return 'vless'
+            elif choice == "2":
+                print("\n已选择: HTTP 模式\n")
+                return 'http'
+            else:
+                print("无效选项，请输入 1 或 2")
+        except (KeyboardInterrupt, EOFError):
+            print("\n\n已取消，使用默认 VLESS 模式\n")
+            return 'vless'
+
+
+# 备用 VLESS 脚本（当找不到破皮版时使用）
+_FALLBACK_VLESS_SCRIPT = '''import{connect}from"cloudflare:sockets";const UUID=crypto.randomUUID();export default{async fetch(e,t){const n=new URL(e.url),s=t.UUID||UUID;if("/"===n.pathname||"/api/config"===n.pathname)return new Response(JSON.stringify({host:n.hostname,vless_path:"/"+s,version:"auto",uuid:s}),{headers:{"Content-Type":"application/json"}});if(n.pathname==="/"+s&&"websocket"===e.headers.get("Upgrade")){const[t,n]=Object.values(new WebSocketPair);return n.accept(),new Response(null,{status:101,webSocket:t})}return"/proxy"===n.pathname?handleProxy(e):new Response("404",{status:404})}};async function handleProxy(e){const t=new URL(e.url).searchParams.get("url");if(!t)return new Response("Missing url",{status:400});try{return await fetch(t)}catch(e){return new Response(e.message,{status:500})}}'''
+
+# 备用 HTTP 代理脚本（当找不到爬楼梯 Workers 时使用）
+_FALLBACK_HTTP_SCRIPT = '''const UA_LIST=["Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36","Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"];export default{async fetch(e,t){const n=new URL(e.url);if("/health"===n.pathname)return new Response("ok");if("/ip"===n.pathname){const e=await fetch("https://api.ipify.org?format=json");return new Response(await e.text(),{headers:{"Content-Type":"application/json"}})}if("/proxy"===n.pathname){const r=n.searchParams.get("url");if(!r)return new Response("Missing url",{status:400});const o={"User-Agent":UA_LIST[Math.floor(Math.random()*UA_LIST.length)],"Accept":"text/html,application/xhtml+xml","Accept-Language":"en-US,en;q=0.9"};try{const t=await fetch(r,{method:e.method,headers:o});return new Response(await t.text(),{headers:{"Content-Type":t.headers.get("Content-Type")||"text/html"}})}catch(e){return new Response(e.message,{status:500})}}return new Response("CFspider HTTP Proxy\\n/proxy?url=TARGET\\n/ip\\n/health")}};'''
 
 
 # Workers 代码（运行时加载）
@@ -77,6 +128,7 @@ class WorkersManager:
     
     自动创建和管理 Workers，当失效时自动重建。
     可以直接作为 cf_proxies 参数使用。
+    支持两种模式：VLESS（完整代理）和 HTTP（轻量爬虫）。
     """
     
     def __init__(
@@ -87,7 +139,8 @@ class WorkersManager:
         auto_recreate: bool = True,
         check_interval: int = 60,
         env_vars: Optional[dict] = None,
-        my_domain: Optional[str] = None
+        my_domain: Optional[str] = None,
+        mode: Optional[str] = None
     ):
         """
         初始化 Workers 管理器
@@ -105,6 +158,10 @@ class WorkersManager:
                 - SOCKS5: SOCKS5 代理地址
                 
                 示例: {"UUID": "your-uuid", "PROXYIP": "1.2.3.4"}
+            mode: 部署模式
+                - 'vless': VLESS 模式（破皮版，完全隐藏 CF 特征，支持代理软件）
+                - 'http': HTTP 模式（爬楼梯版，轻量爬虫代理，会暴露 CF 特征头）
+                - None: 运行时交互式选择
         """
         self.api_token = api_token
         self.account_id = account_id
@@ -113,6 +170,15 @@ class WorkersManager:
         self.check_interval = check_interval
         self.env_vars = env_vars or {}
         self.my_domain = my_domain
+        
+        # 确定部署模式
+        if mode is None:
+            self.mode = _select_mode_interactive()
+        else:
+            self.mode = mode.lower()
+            if self.mode not in ('vless', 'http'):
+                print(f"[CFspider] 无效模式 '{mode}'，使用默认 'vless' 模式")
+                self.mode = 'vless'
         
         self._url: Optional[str] = None
         self._custom_url: Optional[str] = None
@@ -152,8 +218,10 @@ class WorkersManager:
         """创建或更新 Workers"""
         api_url = f"https://api.cloudflare.com/client/v4/accounts/{self.account_id}/workers/scripts/{self.worker_name}"
         
-        # 获取 Workers 脚本
-        script = _get_workers_script()
+        # 获取 Workers 脚本（根据模式选择）
+        script = _get_workers_script(self.mode)
+        mode_name = "VLESS 破皮版" if self.mode == 'vless' else "HTTP 爬楼梯版"
+        print(f"[CFspider] 正在部署 {mode_name} Workers...")
         
         try:
             # 如果有环境变量，使用 multipart/form-data 格式
@@ -392,7 +460,13 @@ class WorkersManager:
             return False
         
         try:
-            response = requests.get(f"{self._url}/api/config", timeout=10)
+            # 根据模式使用不同的健康检查端点
+            if self.mode == 'http':
+                endpoint = "/health"
+            else:
+                endpoint = "/api/config"
+            
+            response = requests.get(f"{self._url}{endpoint}", timeout=10)
             return response.ok
         except:
             return False
@@ -480,7 +554,9 @@ def make_workers(
     accesskey: Optional[str] = None,
     two_proxy: Optional[str] = None,
     # 自定义域名
-    my_domain: Optional[str] = None
+    my_domain: Optional[str] = None,
+    # 部署模式
+    mode: Optional[str] = None
 ) -> WorkersManager:
     """
     创建 Cloudflare Workers 并返回管理器
@@ -509,6 +585,18 @@ def make_workers(
         accesskey: 访问密钥（破皮版用）
         two_proxy: 双层代理地址（格式: host:port:user:pass）
         my_domain: 自定义域名（如 proxy.example.com，域名需已在 Cloudflare）
+        mode: 部署模式（重要！）
+            - 'vless': VLESS 模式（推荐）
+                * 部署破皮版 Workers
+                * 完全隐藏 Cloudflare 特征头
+                * 支持 V2Ray/Clash 等代理软件
+                * 适合需要完整代理功能的场景
+            - 'http': HTTP 模式（轻量）
+                * 部署爬楼梯 Workers
+                * 轻量级 HTTP 代理
+                * 适合普通网页爬虫
+                * 注意：会暴露 Cloudflare 特征头（Cf-Ray、Cf-Worker 等）
+            - None: 运行时弹出交互式选择菜单
     
     Returns:
         WorkersManager: Workers 管理器，可直接用于 cf_proxies
@@ -516,46 +604,46 @@ def make_workers(
     Example:
         >>> import cfspider
         >>> 
-        >>> # 基本用法
-        >>> workers = cfspider.make_workers(
-        ...     api_token="your-api-token",
-        ...     account_id="your-account-id"
-        ... )
-        >>> 
-        >>> # 指定 UUID（固定 IP）
+        >>> # VLESS 模式（推荐，隐藏特征）
         >>> workers = cfspider.make_workers(
         ...     api_token="your-api-token",
         ...     account_id="your-account-id",
+        ...     mode='vless'  # 或省略，运行时选择
+        ... )
+        >>> 
+        >>> # HTTP 模式（轻量爬虫）
+        >>> workers = cfspider.make_workers(
+        ...     api_token="your-api-token",
+        ...     account_id="your-account-id",
+        ...     mode='http'
+        ... )
+        >>> 
+        >>> # 指定 UUID（VLESS 模式）
+        >>> workers = cfspider.make_workers(
+        ...     api_token="your-api-token",
+        ...     account_id="your-account-id",
+        ...     mode='vless',
         ...     uuid="your-custom-uuid"
-        ... )
-        >>> 
-        >>> # 使用代理 IP
-        >>> workers = cfspider.make_workers(
-        ...     api_token="your-api-token",
-        ...     account_id="your-account-id",
-        ...     proxyip="proxyip.fxxk.dedyn.io"
-        ... )
-        >>> 
-        >>> # 使用完整环境变量
-        >>> workers = cfspider.make_workers(
-        ...     api_token="your-api-token",
-        ...     account_id="your-account-id",
-        ...     env_vars={
-        ...         "UUID": "your-uuid",
-        ...         "PROXYIP": "1.2.3.4",
-        ...         "SOCKS5": "user:pass@host:port"
-        ...     }
         ... )
         >>> 
         >>> # 直接用于请求
         >>> response = cfspider.get(
         ...     "https://httpbin.org/ip",
         ...     cf_proxies=workers,
-        ...     uuid=workers.uuid
+        ...     uuid=workers.uuid  # VLESS 模式需要
         ... )
         >>> 
         >>> # 停止健康检查
         >>> workers.stop()
+    
+    模式对比：
+        | 特性           | VLESS 模式    | HTTP 模式     |
+        |----------------|---------------|---------------|
+        | CF 特征头      | 完全隐藏      | 暴露          |
+        | 代理软件支持   | 是            | 否            |
+        | 爬虫适用       | 是            | 是            |
+        | 复杂度         | 需要 UUID     | 简单          |
+        | 检测风险       | 低            | 中（可被识别）|
     
     API Token 权限要求：
         - Account: Workers Scripts: Edit
@@ -587,7 +675,8 @@ def make_workers(
         auto_recreate=auto_recreate,
         check_interval=check_interval,
         env_vars=final_env_vars if final_env_vars else None,
-        my_domain=my_domain
+        my_domain=my_domain,
+        mode=mode
     )
 
 

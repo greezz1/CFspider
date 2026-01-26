@@ -57,7 +57,7 @@ UUID 使用说明：
     ... )
 
 版本信息：
-    - 版本号: 1.8.6
+    - 版本号: 1.9.0
     - 协议: Apache License 2.0
     - 文档: https://www.cfspider.com
 
@@ -248,7 +248,7 @@ class PlaywrightNotInstalledError(CFSpiderError):
     pass
 
 
-__version__ = "1.8.9"
+__version__ = "1.9.0"
 __all__ = [
     # 同步 API (requests)
     "get", "post", "put", "delete", "head", "options", "patch", "request",

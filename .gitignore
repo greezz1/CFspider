@@ -15,6 +15,7 @@ edgetunnel_proxy.py
 test.py
 test_*.py
 *.html
+
 # ========================================
 # 机密文件 - 绝对不上传 GitHub
 # ========================================
@@ -30,7 +31,7 @@ mirror/
 *_mirror/
 test_mirror_*/
 
-#混淆脚本
+# 混淆脚本
 obfuscate_pages.py
 obfuscate_config.json
 advanced_obfuscate.js
@@ -47,25 +48,21 @@ workers_en.js
 !破皮版workers_明文.js
 !破皮版workers_超明文.js
 !vless_workers.js
+!爬楼梯workers.js
 
-#示例文件
+# 示例文件
 examples/
 
-#视频生成脚本
+# 视频生成脚本
 create_video.py
 temp_obfuscate.js
 
-#视频文件（排除普通版本，保留高亮模糊版本）
-media/videos/1080p60/CameraFollowCursorCVScene.mp4
-# 允许提交高亮模糊版本
-!media/videos/1080p60/CameraFollowCursorCV.mp4
-
-#视频文件目录
-media/images/
-media/text/
-media/videos/1080p60/partial_movie_files/
+# 视频文件目录
+media/
 
 # 大视频文件
 cfspider教程.mp4
 *.mp4
-!media/videos/1080p60/CameraFollowCursorCV.mp4
+
+# Remotion 视频项目
+cfspider-video/
