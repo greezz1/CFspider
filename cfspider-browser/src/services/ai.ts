@@ -377,7 +377,9 @@ async function executeToolCall(name: string, args: Record<string, unknown>): Pro
       if (!webview) return 'Clicked'
       try {
         const selector = (args.selector as string).replace(/'/g, "\\'")
-        await webview.executeJavaScript(`
+        
+        // 获取元素位置用于虚拟鼠标
+        const elementInfo = await webview.executeJavaScript(`
           (function() {
             var oldH = document.getElementById('cfspider-agent-highlight');
             if (oldH) oldH.remove();
@@ -401,18 +403,50 @@ async function executeToolCall(name: string, args: Record<string, unknown>): Pro
             h.appendChild(lbl);
             document.body.appendChild(h);
             
-            setTimeout(function() {
-              el.click();
-              setTimeout(function() {
-                var hh = document.getElementById('cfspider-agent-highlight');
-                if (hh) hh.remove();
-              }, 500);
-            }, 500);
-            
-            return { success: true };
+            return { 
+              success: true, 
+              x: rect.left + rect.width / 2,
+              y: rect.top + rect.height / 2
+            };
           })()
         `)
-        await new Promise(resolve => setTimeout(resolve, 2000))
+        
+        if (elementInfo.success) {
+          // 获取 browser-container 的位置偏移
+          const container = document.getElementById('browser-container')
+          const containerRect = container?.getBoundingClientRect() || { left: 0, top: 0 }
+          
+          // 显示并移动虚拟鼠标到元素位置
+          store.showMouse()
+          store.moveMouse(
+            containerRect.left + elementInfo.x, 
+            containerRect.top + elementInfo.y, 
+            400
+          )
+          
+          // 等待鼠标移动完成
+          await new Promise(resolve => setTimeout(resolve, 500))
+          
+          // 触发点击动画
+          store.clickMouse()
+          
+          // 执行实际点击
+          await webview.executeJavaScript(`
+            (function() {
+              var el = document.querySelector('${selector}');
+              if (el) {
+                el.click();
+                setTimeout(function() {
+                  var hh = document.getElementById('cfspider-agent-highlight');
+                  if (hh) hh.remove();
+                }, 500);
+              }
+            })()
+          `)
+          
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 1500))
         return 'Clicked'
       } catch (e) {
         return 'Clicked'
@@ -428,6 +462,16 @@ async function executeToolCall(name: string, args: Record<string, unknown>): Pro
           (function() {
             var targetText = '${targetText}'.toLowerCase();
             console.log('CFSpider: Looking for text:', targetText);
+            
+            // Check if user explicitly wants personal/account page
+            var wantsPersonalPage = targetText.indexOf('个人') !== -1 || 
+                                    targetText.indexOf('账户') !== -1 || 
+                                    targetText.indexOf('账号') !== -1 ||
+                                    targetText.indexOf('home') !== -1 ||
+                                    targetText.indexOf('我的') !== -1 ||
+                                    targetText.indexOf('登录') !== -1 ||
+                                    targetText.indexOf('登陆') !== -1;
+            console.log('CFSpider: Wants personal page:', wantsPersonalPage);
             
             // Build domain patterns from target text
             var domainPatterns = [];
@@ -556,9 +600,39 @@ async function executeToolCall(name: string, args: Record<string, unknown>): Pro
             var citeElements = document.querySelectorAll('cite, .b_attribution, .tF2Cxc cite, [class*="url"], [class*="cite"]');
             console.log('CFSpider: Found', citeElements.length, 'cite elements');
             
+            // Bad subdomains to skip entirely - these are user/account pages, not homepages
+            var badSubdomainPrefixes = ['home.', 'my.', 'user.', 'account.', 'login.', 'passport.', 'member.', 'profile.', 'center.', 'i.', 'u.', 'sso.', 'auth.'];
+            // Also check for these keywords in the result text
+            var badKeywords = ['个人中心', '我的订单', '我的账户', '账户设置', '登录', 'home.', '/home', '个人信息'];
+            
+            // Helper to check if text contains bad subdomain (only if user doesn't want personal page)
+            function containsBadSubdomain(text) {
+              if (wantsPersonalPage) return false;  // User wants personal page, don't filter
+              
+              text = text.toLowerCase();
+              for (var k = 0; k < badSubdomainPrefixes.length; k++) {
+                if (text.indexOf(badSubdomainPrefixes[k]) !== -1) {
+                  return true;
+                }
+              }
+              // Also check for bad keywords
+              for (var k = 0; k < badKeywords.length; k++) {
+                if (text.indexOf(badKeywords[k]) !== -1) {
+                  return true;
+                }
+              }
+              return false;
+            }
+            
             for (var i = 0; i < citeElements.length; i++) {
               var cite = citeElements[i];
               var citeText = (cite.textContent || '').toLowerCase();
+              
+              // Skip if cite text contains bad subdomains
+              if (containsBadSubdomain(citeText)) {
+                console.log('CFSpider: Skipping cite with bad subdomain:', citeText);
+                continue;
+              }
               
               // Check if this cite shows our target domain
               for (var j = 0; j < domainPatterns.length; j++) {
@@ -568,6 +642,13 @@ async function executeToolCall(name: string, args: Record<string, unknown>): Pro
                   // Find the parent link or nearby link
                   var parentResult = cite.closest('li, .b_algo, .g, [class*="result"]');
                   if (parentResult) {
+                    // Also check if the entire result block contains bad subdomain mentions
+                    var resultText = (parentResult.textContent || '').toLowerCase();
+                    if (containsBadSubdomain(resultText) && resultText.indexOf('www.') === -1) {
+                      console.log('CFSpider: Skipping result with bad subdomain in block:', resultText.slice(0, 100));
+                      continue;
+                    }
+                    
                     var link = parentResult.querySelector('a[href]');
                     if (link) {
                       var rect = link.getBoundingClientRect();
@@ -575,6 +656,19 @@ async function executeToolCall(name: string, args: Record<string, unknown>): Pro
                         // Calculate score based on the CITE TEXT (displayed URL), not href
                         // This is critical because Bing uses redirect URLs in href
                         var citeScore = 200 + scoreCiteText(citeText, domainPatterns[j]);
+                        
+                        // Big bonus for www. or main domain in cite text
+                        if (citeText.indexOf('www.' + domainPatterns[j]) !== -1) {
+                          citeScore += 500;  // Increased bonus
+                          console.log('CFSpider: WWW bonus for:', citeText);
+                        }
+                        
+                        // Bonus for official keywords
+                        if (resultText.indexOf('官网') !== -1 || resultText.indexOf('官方') !== -1 || resultText.indexOf('official') !== -1) {
+                          citeScore += 200;
+                          console.log('CFSpider: Official keyword bonus for:', citeText);
+                        }
+                        
                         // Position bonus - first result gets more
                         if (rect.top < 300) citeScore += 50;
                         else if (rect.top < 400) citeScore += 30;
@@ -689,22 +783,78 @@ async function executeToolCall(name: string, args: Record<string, unknown>): Pro
               }
             }
             
+            // Filter out user-related subdomains from candidates before sorting
+            // Check both href (for direct links) and text (for Bing redirect links where cite shows real URL)
+            candidates = candidates.filter(function(c) {
+              // Check the displayed text (cite text) for bad subdomains
+              var textLower = (c.text || '').toLowerCase();
+              if (containsBadSubdomain(textLower)) {
+                console.log('CFSpider: FILTERED OUT bad subdomain in text:', textLower);
+                return false;
+              }
+              
+              // Also check href for direct links
+              try {
+                var urlObj = new URL(c.href);
+                var hostname = urlObj.hostname.toLowerCase();
+                if (containsBadSubdomain(hostname)) {
+                  console.log('CFSpider: FILTERED OUT bad subdomain in href:', hostname);
+                  return false;
+                }
+              } catch(e) {}
+              
+              return true;
+            });
+            
             // Sort by score, prioritize domain matches
             candidates.sort(function(a, b) {
+              // First prioritize www. or main domain
+              var aIsMain = false, bIsMain = false;
+              try {
+                var aHost = new URL(a.href).hostname.toLowerCase();
+                var bHost = new URL(b.href).hostname.toLowerCase();
+                aIsMain = aHost.indexOf('www.') === 0 || aHost.split('.').length === 2;
+                bIsMain = bHost.indexOf('www.') === 0 || bHost.split('.').length === 2;
+              } catch(e) {}
+              
+              if (aIsMain && !bIsMain) return -1;
+              if (!aIsMain && bIsMain) return 1;
+              
               if (a.matchedDomain && !b.matchedDomain) return -1;
               if (!a.matchedDomain && b.matchedDomain) return 1;
               return b.score - a.score;
             });
             
-            console.log('CFSpider: Found', candidates.length, 'candidates');
+            console.log('CFSpider: Found', candidates.length, 'candidates after filtering');
             candidates.slice(0, 5).forEach(function(c) {
-              console.log('  Score:', c.score, 'Domain:', c.matchedDomain, 'Text:', c.text);
+              console.log('  Score:', c.score, 'Domain:', c.matchedDomain, 'Href:', c.href.slice(0, 50));
             });
             
             if (candidates.length > 0) {
-              var best = candidates[0];
-              console.log('CFSpider: Best match:', best.href, 'Score:', best.score);
-              return { found: true, x: best.rect.left + best.rect.width / 2, y: best.rect.top + best.rect.height / 2, href: best.href };
+              // Final verification: skip any result that looks like a personal/account page
+              var best = null;
+              for (var i = 0; i < candidates.length; i++) {
+                var c = candidates[i];
+                var cText = (c.text || '').toLowerCase();
+                var cHref = (c.href || '').toLowerCase();
+                
+                // Skip if not wanting personal page but result seems like one
+                if (!wantsPersonalPage) {
+                  if (cText.indexOf('home.') !== -1 || cHref.indexOf('home.') !== -1 ||
+                      cText.indexOf('/home') !== -1 || cHref.indexOf('/home') !== -1) {
+                    console.log('CFSpider: Final filter - skipping home page:', cText || cHref);
+                    continue;
+                  }
+                }
+                
+                best = c;
+                break;
+              }
+              
+              if (best) {
+                console.log('CFSpider: Best match:', best.href, 'Score:', best.score);
+                return { found: true, x: best.rect.left + best.rect.width / 2, y: best.rect.top + best.rect.height / 2, href: best.href };
+              }
             }
             
             return { found: false };
@@ -716,6 +866,24 @@ async function executeToolCall(name: string, args: Record<string, unknown>): Pro
         }
         
         console.log('click_text found:', result.href)
+        
+        // 获取 browser-container 的位置偏移
+        const container = document.getElementById('browser-container')
+        const containerRect = container?.getBoundingClientRect() || { left: 0, top: 0 }
+        
+        // 显示并移动虚拟鼠标到元素位置
+        store.showMouse()
+        store.moveMouse(
+          containerRect.left + result.x, 
+          containerRect.top + result.y, 
+          400
+        )
+        
+        // 等待鼠标移动完成
+        await new Promise(resolve => setTimeout(resolve, 500))
+        
+        // 触发点击动画
+        store.clickMouse()
         
         await webview.executeJavaScript(`
           (function() {
@@ -758,7 +926,7 @@ async function executeToolCall(name: string, args: Record<string, unknown>): Pro
                   var hh = document.getElementById('cfspider-agent-highlight');
                   if (hh) hh.remove();
                 }, 500);
-              }, 800);
+              }, 300);
             }
           })()
         `)
@@ -793,6 +961,51 @@ async function executeToolCall(name: string, args: Record<string, unknown>): Pro
       try {
         const selector = args.selector as string
         const text = args.text as string
+        
+        // 先获取输入框位置用于虚拟鼠标
+        const inputInfo = await webview.executeJavaScript(`
+          (function() {
+            var selectors = [
+              '${(selector || '').replace(/'/g, "\\'")}',
+              '#query-builder-test', 
+              'input[data-target="query-builder.input"]',
+              '#sb_form_q', 'textarea#sb_form_q',
+              '#kw',
+              '#key', '#keyword', '.search-text',
+              '#q', 'input[name="q"]', 'textarea[name="q"]',
+              'input[type="search"]'
+            ];
+            for (var i = 0; i < selectors.length; i++) {
+              if (!selectors[i]) continue;
+              var el = document.querySelector(selectors[i]);
+              if (el && el.offsetWidth > 0 && el.offsetHeight > 0) {
+                var rect = el.getBoundingClientRect();
+                return { 
+                  found: true, 
+                  x: rect.left + rect.width / 2,
+                  y: rect.top + rect.height / 2
+                };
+              }
+            }
+            return { found: false };
+          })()
+        `)
+        
+        // 如果找到输入框，显示虚拟鼠标
+        if (inputInfo.found) {
+          const container = document.getElementById('browser-container')
+          const containerRect = container?.getBoundingClientRect() || { left: 0, top: 0 }
+          
+          store.showMouse()
+          store.moveMouse(
+            containerRect.left + inputInfo.x, 
+            containerRect.top + inputInfo.y, 
+            400
+          )
+          await new Promise(resolve => setTimeout(resolve, 500))
+          store.clickMouse()
+          await new Promise(resolve => setTimeout(resolve, 300))
+        }
         
         // Special handling for GitHub - need to click the search button first to open search
         await webview.executeJavaScript(`
@@ -1141,6 +1354,57 @@ async function executeToolCall(name: string, args: Record<string, unknown>): Pro
     case 'click_search_button': {
       if (!webview) return 'Clicked search button'
       try {
+        // 先找到搜索按钮位置
+        const btnInfo = await webview.executeJavaScript(`
+          (function() {
+            // Comprehensive list of search button selectors
+            var btnSelectors = [
+              // Bing
+              '#search_icon', '#sb_form_go', 'input[type="submit"]#sb_form_go',
+              'svg.search', 'button[aria-label*="Search"]', 'button[aria-label*="search"]',
+              // Baidu
+              '#su', 'input#su',
+              // JD.com
+              '.button', 'button.button', 'a.button',
+              '.form button', '.search button',
+              '[class*="search-btn"]', '[class*="search_btn"]',
+              // Generic
+              'button[type="submit"]', 'input[type="submit"]'
+            ];
+            
+            for (var i = 0; i < btnSelectors.length; i++) {
+              var btns = document.querySelectorAll(btnSelectors[i]);
+              for (var j = 0; j < btns.length; j++) {
+                var btn = btns[j];
+                if (btn && btn.offsetWidth > 0 && btn.offsetHeight > 0) {
+                  var rect = btn.getBoundingClientRect();
+                  return { 
+                    found: true, 
+                    x: rect.left + rect.width / 2,
+                    y: rect.top + rect.height / 2
+                  };
+                }
+              }
+            }
+            return { found: false };
+          })()
+        `)
+        
+        // 如果找到按钮，显示虚拟鼠标
+        if (btnInfo.found) {
+          const container = document.getElementById('browser-container')
+          const containerRect = container?.getBoundingClientRect() || { left: 0, top: 0 }
+          
+          store.showMouse()
+          store.moveMouse(
+            containerRect.left + btnInfo.x, 
+            containerRect.top + btnInfo.y, 
+            400
+          )
+          await new Promise(resolve => setTimeout(resolve, 500))
+          store.clickMouse()
+        }
+        
         const result = await webview.executeJavaScript(`
           (function() {
             console.log('CFSpider: Looking for search button...');
@@ -1259,7 +1523,8 @@ async function executeToolCall(name: string, args: Record<string, unknown>): Pro
           })()
         `)
         console.log('click_search_button result:', result)
-        await new Promise(resolve => setTimeout(resolve, 2000))
+        
+        await new Promise(resolve => setTimeout(resolve, 1500))
         
         // Auto-verify: check if search results appeared
         try {
@@ -2003,6 +2268,17 @@ If the user asks to search for "cfspider" or mentions the cfspider project:
 Example: If user says "search cfspider on GitHub", after completing the task, say:
 "Successfully found cfspider project on GitHub! By the way, this browser you're using is also part of the unified cfspider project management. I am from cfspider!"
 
+## MEMORY & CONTINUITY
+
+You have access to the conversation history including previous tool calls and their results.
+- ALWAYS check previous messages to see what you already did
+- If you already navigated to a website, DON'T navigate again - just continue from current state
+- If you already searched for something, use those results instead of searching again
+- If a previous action failed, try a DIFFERENT approach, not the same one
+- Use get_page_info() to check current state before deciding what to do
+
+Example: If history shows you already clicked "京东" and are now on jd.com, just proceed with the next step (like searching for products) instead of navigating to Bing again.
+
 ## REMEMBER
 
 - ALWAYS respond in Chinese
@@ -2010,6 +2286,7 @@ Example: If user says "search cfspider on GitHub", after completing the task, sa
 - Express your thinking process through conversation, not through tools
 - Use Bing (https://www.bing.com) as the default search engine
 - Never directly navigate to shopping or social sites
+- CHECK HISTORY before acting - don't repeat successful operations
 `
 
 // Manual safety check function (can be called from UI)
@@ -2102,11 +2379,41 @@ export async function sendAIMessage(content: string, useTools: boolean = true) {
   const toolCallHistory: Array<{ name: string; arguments: object; result?: string; comment?: string }> = []
 
   try {
-    const chatHistory: Array<{ role: string; content?: string; tool_calls?: any[]; tool_call_id?: string }> = [
-      { role: 'system', content: systemPrompt },
-      ...messages.slice(-10).map(m => ({ role: m.role, content: m.content })),
-      { role: 'user', content }
+    // 构建聊天历史，包含工具调用信息以便 AI 记住之前的操作
+    const chatHistory: Array<{ role: string; content?: string; tool_calls?: any[]; tool_call_id?: string; name?: string }> = [
+      { role: 'system', content: systemPrompt }
     ]
+    
+    // 获取最近 200 条消息，并包含工具调用详情（足够记住完整的操作流程）
+    const recentMessages = messages.slice(-200)
+    for (const msg of recentMessages) {
+      if (msg.role === 'user') {
+        chatHistory.push({ role: 'user', content: msg.content })
+      } else if (msg.role === 'assistant') {
+        // 如果消息包含工具调用，构建完整的工具调用历史
+        if (msg.toolCalls && msg.toolCalls.length > 0) {
+          // 构建操作摘要，让 AI 知道之前做了什么
+          let operationSummary = msg.content || ''
+          const toolSummaries = msg.toolCalls.map(tc => {
+            const argsStr = JSON.stringify(tc.arguments)
+            // 保留更多结果信息，让 AI 能充分了解之前的操作
+            const resultPreview = tc.result ? tc.result.slice(0, 500) : ''
+            return `[${tc.name}(${argsStr})] => ${resultPreview}`
+          }).join('\n')
+          
+          if (toolSummaries) {
+            operationSummary = `${operationSummary}\n\n已执行的操作记录:\n${toolSummaries}`
+          }
+          
+          chatHistory.push({ role: 'assistant', content: operationSummary })
+        } else {
+          chatHistory.push({ role: 'assistant', content: msg.content })
+        }
+      }
+    }
+    
+    // 添加当前用户消息
+    chatHistory.push({ role: 'user', content })
 
     let iteration = 0
     const maxIterations = 30

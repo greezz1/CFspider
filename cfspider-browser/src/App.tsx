@@ -27,11 +27,9 @@ function App() {
   const [showAI, setShowAI] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [isReady, setIsReady] = useState(false)
-  const [unreadCount, setUnreadCount] = useState(0)
-  const [lastMessageCount, setLastMessageCount] = useState(0)
   const { 
     loadConfig, loadSavedConfigs, loadBrowserSettings, loadChatSessions,
-    messages, aiConfig, chatSessions, clearMessages, newChatSession, 
+    aiConfig, chatSessions, clearMessages, newChatSession, 
     switchChatSession, deleteChatSession 
   } = useStore()
   
@@ -46,24 +44,6 @@ function App() {
       loadChatSessions()
     ]).then(() => setIsReady(true))
   }, [])
-
-  // 监听新消息，更新未读计数
-  useEffect(() => {
-    if (messages.length > lastMessageCount) {
-      // 有新消息
-      if (!showAI) {
-        // 如果对话窗口没有打开，增加未读计数
-        setUnreadCount(prev => prev + (messages.length - lastMessageCount))
-      }
-    }
-    setLastMessageCount(messages.length)
-  }, [messages.length, showAI, lastMessageCount])
-
-  // 打开对话窗口时清除未读计数
-  const handleOpenChat = () => {
-    setShowAI(true)
-    setUnreadCount(0)
-  }
 
   // 等待设置加载完成（简化加载界面）
   if (!isReady) {
@@ -82,23 +62,18 @@ function App() {
       {/* AI 悬浮按钮 */}
       {!showAI && (
         <button
-          onClick={handleOpenChat}
-          className="fixed bottom-6 right-6 w-14 h-14 bg-blue-500 hover:bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center z-50"
+          onClick={() => setShowAI(true)}
+          className="fixed bottom-6 right-6 w-14 h-14 bg-blue-500/90 hover:bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center z-[99999]"
         >
           <MessageCircle size={24} />
-          {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full text-xs flex items-center justify-center animate-pulse">
-              {unreadCount > 9 ? '9+' : unreadCount}
-            </span>
-          )}
         </button>
       )}
 
-      {/* AI 对话悬浮窗 */}
+      {/* AI 对话悬浮窗 - 半透明以便观察操作过程 */}
       {showAI && (
-        <div className="fixed bottom-6 right-6 w-[420px] h-[600px] bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden z-50">
+        <div className="fixed bottom-6 right-6 w-[420px] h-[600px] bg-white/85 backdrop-blur-sm rounded-2xl shadow-2xl border border-gray-200/50 flex flex-col overflow-hidden z-[99999]">
           {/* 悬浮窗头部 */}
-          <div className="flex items-center justify-between px-4 py-3 bg-blue-500 text-white">
+          <div className="flex items-center justify-between px-4 py-3 bg-blue-500/90 text-white">
             <div className="flex items-center gap-2">
               <span className="font-medium">{aiName}</span>
               {/* 历史记录下拉 */}

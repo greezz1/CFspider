@@ -2,6 +2,7 @@ import { useRef, useEffect, useCallback, useState } from 'react'
 import AddressBar from './AddressBar'
 import Toolbar from './Toolbar'
 import TabBar from './TabBar'
+import VirtualMouse from './VirtualMouse'
 import { useStore } from '../../store'
 
 // 检查是否在 Electron 环境中
@@ -314,6 +315,21 @@ export default function Browser({ onSettingsClick }: BrowserProps) {
     `
 
     webview.executeJavaScript(script).catch(console.error)
+  }, [])
+
+  // 初始化虚拟鼠标 - 常驻显示
+  const { showMouse, moveMouse } = useStore()
+  
+  useEffect(() => {
+    if (isElectron) {
+      // 浏览器加载后显示虚拟鼠标，初始位置在浏览器中央
+      const container = document.getElementById('browser-container')
+      if (container) {
+        const rect = container.getBoundingClientRect()
+        showMouse()
+        moveMouse(rect.left + rect.width / 2, rect.top + rect.height / 2, 0)
+      }
+    }
   }, [])
 
   // 监听 webview 事件 (仅 Electron 环境)
@@ -1064,7 +1080,7 @@ export default function Browser({ onSettingsClick }: BrowserProps) {
       {/* 地址栏 */}
       <AddressBar url={url} onNavigate={navigate} />
       
-      {/* WebView (Electron) 或 iframe (浏览器) */}
+        {/* WebView (Electron) 或 iframe (浏览器) */}
       <div className="flex-1 bg-white relative overflow-hidden" id="browser-container">
         {isElectron ? (
           url ? (
@@ -1096,6 +1112,8 @@ export default function Browser({ onSettingsClick }: BrowserProps) {
           </>
         )}
         
+        {/* 虚拟鼠标 - AI 操作时显示 */}
+        <VirtualMouse />
       </div>
     </div>
   )
