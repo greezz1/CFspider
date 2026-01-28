@@ -111,6 +111,12 @@ from .workers_manager import (
     WorkersManager
 )
 
+# 人类行为模拟浏览器
+from .human_browser import HumanBrowser, HumanBrowserSync
+
+# AI 驱动的智能浏览器
+from .ai_browser import AIBrowser, AIBrowserSync, CrawlResult, ExecuteResult, PRESET_APIS
+
 # 异步 API（基于 httpx）
 from .async_api import (
     aget, apost, aput, adelete, ahead, aoptions, apatch,
@@ -286,4 +292,8 @@ __all__ = [
     "make_workers", "list_workers", "delete_workers", "WorkersManager",
     # 数据处理
     "DataFrame", "read", "read_csv", "read_json", "read_excel",
+    # 人类行为模拟浏览器
+    "HumanBrowser", "HumanBrowserSync",
+    # AI 智能浏览器
+    "AIBrowser", "AIBrowserSync", "CrawlResult", "ExecuteResult", "PRESET_APIS",
 ]

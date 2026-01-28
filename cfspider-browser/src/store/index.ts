@@ -1,0 +1,794 @@
+import { create } from 'zustand'
+
+// 标签页
+export interface Tab {
+  id: string
+  url: string
+  title: string
+  isLoading: boolean
+}
+
+// 历史记录
+export interface HistoryItem {
+  id: string
+  url: string
+  title: string
+  visitedAt: number
+}
+
+export interface SelectedElement {
+  id: string
+  selector: string
+  text: string
+  type: 'text' | 'link' | 'image' | 'attribute'
+  attribute?: string
+  preview?: string
+  tag?: string  // HTML 标签名
+  role?: 'title' | 'content' | 'link' | 'auto'  // 元素角色
+}
+
+export interface ExtractedData {
+  selector: string
+  values: string[]
+}
+
+export interface Rule {
+  id: string
+  name: string
+  urlPattern: string
+  elements: SelectedElement[]
+  createdAt: number
+}
+
+export interface Message {
+  id: string
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  timestamp: number
+  toolCalls?: Array<{
+    name: string
+    arguments: object
+    result?: string
+    comment?: string  // AI's commentary for this specific tool call
+  }>
+}
+
+// 聊天会话
+export interface ChatSession {
+  id: string
+  title: string
+  messages: Message[]
+  createdAt: number
+  updatedAt: number
+}
+
+export interface AIConfig {
+  endpoint: string
+  apiKey: string
+  model: string
+}
+
+export interface SavedAIConfig extends AIConfig {
+  id: string
+  name: string
+  createdAt: number
+}
+
+export interface MouseState {
+  visible: boolean
+  x: number
+  y: number
+  clicking: boolean
+  clickId: number  // 用于触发点击动画
+  duration: number // 移动动画时长
+}
+
+// 搜索引擎配置
+export interface SearchEngine {
+  id: string
+  name: string
+  url: string  // 包含 %s 作为搜索词占位符
+  icon?: string
+}
+
+// 已下载的图片
+export interface DownloadedImage {
+  filename: string
+  path: string
+  url: string
+  timestamp: number
+}
+
+// 元素选择请求
+export interface ElementSelectionRequest {
+  id: string
+  purpose: string  // 选择目的描述，如 "爬取新闻列表"
+  status: 'pending' | 'auto' | 'manual' | 'completed' | 'cancelled'
+  selector?: string  // 选择的选择器
+}
+
+// 浏览器设置
+export interface BrowserSettings {
+  searchEngine: string  // 搜索引擎 ID
+  homepage: string
+  defaultZoom: number
+}
+
+// 预设搜索引擎
+export const SEARCH_ENGINES: SearchEngine[] = [
+  { id: 'bing', name: 'Bing', url: 'https://www.bing.com/search?q=%s' },
+  { id: 'google', name: 'Google', url: 'https://www.google.com/search?q=%s' },
+  { id: 'baidu', name: '百度', url: 'https://www.baidu.com/s?wd=%s' },
+  { id: 'duckduckgo', name: 'DuckDuckGo', url: 'https://duckduckgo.com/?q=%s' },
+]
+
+// 搜索引擎首页 URL
+export const SEARCH_ENGINE_HOMEPAGES: Record<string, string> = {
+  'bing': 'https://www.bing.com',
+  'google': 'https://www.google.com',
+  'baidu': 'https://www.baidu.com',
+  'duckduckgo': 'https://duckduckgo.com',
+}
+
+interface AppState {
+  // 标签页
+  tabs: Tab[]
+  activeTabId: string
+  
+  // 历史记录
+  history: HistoryItem[]
+  
+  // 浏览器状态
+  url: string
+  isLoading: boolean
+  selectMode: boolean
+  
+  // 浏览器设置
+  browserSettings: BrowserSettings
+  
+  // 选择的元素
+  selectedElements: SelectedElement[]
+  
+  // 提取的数据
+  extractedData: ExtractedData[]
+  
+  // 规则
+  rules: Rule[]
+  
+  // AI 对话
+  messages: Message[]
+  isAILoading: boolean
+  aiStopRequested: boolean
+  chatSessions: ChatSession[]
+  currentSessionId: string | null
+  
+  // AI 配置
+  aiConfig: AIConfig
+  savedConfigs: SavedAIConfig[]
+  
+  // 虚拟鼠标
+  mouseState: MouseState
+  
+  // 已下载的图片
+  downloadedImages: DownloadedImage[]
+  
+  // 元素选择请求
+  elementSelectionRequest: ElementSelectionRequest | null
+  
+  // 标签页 Actions
+  addTab: (url?: string) => void
+  closeTab: (id: string) => void
+  setActiveTab: (id: string) => void
+  updateTab: (id: string, updates: Partial<Tab>) => void
+  
+  // 历史记录 Actions
+  addHistory: (url: string, title: string) => void
+  clearHistory: () => void
+  loadHistory: () => Promise<void>
+  saveHistory: () => Promise<void>
+  
+  // Actions
+  setUrl: (url: string) => void
+  setLoading: (loading: boolean) => void
+  setSelectMode: (mode: boolean) => void
+  
+  addSelectedElement: (element: SelectedElement) => void
+  removeSelectedElement: (id: string) => void
+  clearSelectedElements: () => void
+  updateElementType: (id: string, type: SelectedElement['type'], attribute?: string) => void
+  
+  setExtractedData: (data: ExtractedData[]) => void
+  clearExtractedData: () => void
+  
+  addRule: (rule: Rule) => void
+  deleteRule: (id: string) => void
+  loadRules: () => Promise<void>
+  saveRules: () => Promise<void>
+  
+  addMessage: (message: Omit<Message, 'id' | 'timestamp'>) => void
+  updateLastMessage: (content: string) => void
+  updateLastMessageWithToolCalls: (content: string, toolCalls: Array<{ name: string; arguments: object; result?: string }>) => void
+  clearMessages: () => void
+  setAILoading: (loading: boolean) => void
+  stopAI: () => void
+  resetAIStop: () => void
+  
+  // 聊天会话管理
+  newChatSession: () => void
+  switchChatSession: (id: string) => void
+  deleteChatSession: (id: string) => void
+  saveChatSessions: () => Promise<void>
+  loadChatSessions: () => Promise<void>
+  autoSaveCurrentSession: () => void
+  
+  setAIConfig: (config: Partial<AIConfig>) => void
+  loadConfig: () => Promise<void>
+  saveConfig: () => Promise<void>
+  
+  // 已保存的配置
+  addSavedConfig: (name: string) => void
+  deleteSavedConfig: (id: string) => void
+  applySavedConfig: (id: string) => void
+  loadSavedConfigs: () => Promise<void>
+  saveSavedConfigs: () => Promise<void>
+  
+  // 鼠标控制
+  showMouse: () => void
+  hideMouse: () => void
+  moveMouse: (x: number, y: number, duration?: number) => void
+  clickMouse: () => void
+  
+  // 浏览器设置
+  setBrowserSettings: (settings: Partial<BrowserSettings>, navigateToHomepage?: boolean) => void
+  loadBrowserSettings: () => Promise<void>
+  saveBrowserSettings: () => Promise<void>
+  
+  // 下载管理
+  setDownloadedImages: (images: DownloadedImage[]) => void
+  clearDownloadedImages: () => void
+  
+  // 元素选择请求
+  setElementSelectionRequest: (request: ElementSelectionRequest | null) => void
+  respondToElementSelection: (mode: 'auto' | 'manual', selector?: string) => void
+}
+
+export const useStore = create<AppState>((set, get) => ({
+  // 初始状态 - 标签页（URL 留空，等待 loadBrowserSettings 加载后设置）
+  tabs: [{ id: 'tab-1', url: '', title: '新标签页', isLoading: false }],
+  activeTabId: 'tab-1',
+  
+  // 历史记录
+  history: [],
+  
+  // 浏览器状态（URL 留空，避免重复跳转）
+  url: '',
+  isLoading: false,
+  selectMode: false,
+  browserSettings: {
+    searchEngine: 'bing',
+    homepage: 'https://www.bing.com',
+    defaultZoom: 100
+  },
+  selectedElements: [],
+  extractedData: [],
+  rules: [],
+  messages: [],
+  isAILoading: false,
+  aiStopRequested: false,
+  chatSessions: [],
+  currentSessionId: null,
+  aiConfig: {
+    endpoint: 'https://api.openai.com/v1/chat/completions',
+    apiKey: '',
+    model: 'gpt-4'
+  },
+  savedConfigs: [],
+  mouseState: {
+    visible: false,
+    x: 0,
+    y: 0,
+    clicking: false,
+    clickId: 0,
+    duration: 300
+  },
+  downloadedImages: [],
+  elementSelectionRequest: null,
+
+  // 标签页 Actions
+  addTab: (url) => {
+    const homepage = SEARCH_ENGINE_HOMEPAGES[get().browserSettings.searchEngine] || 'https://www.bing.com'
+    const newTab: Tab = {
+      id: `tab-${Date.now()}`,
+      url: url || homepage,
+      title: '新标签页',
+      isLoading: false
+    }
+    set((state) => ({
+      tabs: [...state.tabs, newTab],
+      activeTabId: newTab.id,
+      url: newTab.url
+    }))
+  },
+
+  closeTab: (id) => {
+    const { tabs, activeTabId } = get()
+    if (tabs.length <= 1) return // 至少保留一个标签页
+    
+    const newTabs = tabs.filter(t => t.id !== id)
+    let newActiveId = activeTabId
+    
+    // 如果关闭的是当前标签，切换到相邻标签
+    if (id === activeTabId) {
+      const closedIndex = tabs.findIndex(t => t.id === id)
+      const newIndex = closedIndex >= newTabs.length ? newTabs.length - 1 : closedIndex
+      newActiveId = newTabs[newIndex].id
+    }
+    
+    const activeTab = newTabs.find(t => t.id === newActiveId)
+    set({
+      tabs: newTabs,
+      activeTabId: newActiveId,
+      url: activeTab?.url || ''
+    })
+  },
+
+  setActiveTab: (id) => {
+    const tab = get().tabs.find(t => t.id === id)
+    if (tab) {
+      set({ activeTabId: id, url: tab.url })
+    }
+  },
+
+  updateTab: (id, updates) => {
+    set((state) => ({
+      tabs: state.tabs.map(t => t.id === id ? { ...t, ...updates } : t)
+    }))
+    // 如果更新的是当前标签的 URL，同步更新全局 url
+    if (updates.url && id === get().activeTabId) {
+      set({ url: updates.url })
+    }
+  },
+
+  // 历史记录 Actions
+  addHistory: (url, title) => {
+    const newItem: HistoryItem = {
+      id: `history-${Date.now()}`,
+      url,
+      title: title || url,
+      visitedAt: Date.now()
+    }
+    set((state) => ({
+      history: [newItem, ...state.history.filter(h => h.url !== url)].slice(0, 100)
+    }))
+    get().saveHistory()
+  },
+
+  clearHistory: () => {
+    set({ history: [] })
+    get().saveHistory()
+  },
+
+  loadHistory: async () => {
+    if (window.electronAPI?.loadHistory) {
+      try {
+        const history = await window.electronAPI.loadHistory()
+        if (Array.isArray(history)) {
+          set({ history })
+        }
+      } catch (e) {
+        console.error('[CFSpider] 加载历史记录失败:', e)
+      }
+    }
+  },
+
+  saveHistory: async () => {
+    if (window.electronAPI?.saveHistory) {
+      await window.electronAPI.saveHistory(get().history)
+    }
+  },
+
+  // Actions
+  setUrl: (url) => {
+    set({ url })
+    // 同步更新当前标签页
+    const { activeTabId } = get()
+    get().updateTab(activeTabId, { url })
+  },
+  setLoading: (isLoading) => {
+    set({ isLoading })
+    // 同步更新当前标签页
+    const { activeTabId } = get()
+    get().updateTab(activeTabId, { isLoading })
+  },
+  setSelectMode: (selectMode) => set({ selectMode }),
+
+  addSelectedElement: (element) => set((state) => ({
+    selectedElements: [...state.selectedElements, element]
+  })),
+
+  removeSelectedElement: (id) => set((state) => ({
+    selectedElements: state.selectedElements.filter((e) => e.id !== id)
+  })),
+
+  clearSelectedElements: () => set({ selectedElements: [], extractedData: [] }),
+
+  updateElementType: (id, type, attribute) => set((state) => ({
+    selectedElements: state.selectedElements.map((e) =>
+      e.id === id ? { ...e, type, attribute } : e
+    )
+  })),
+
+  setExtractedData: (data) => set({ extractedData: data }),
+  clearExtractedData: () => set({ extractedData: [] }),
+
+  addRule: (rule) => {
+    set((state) => ({ rules: [...state.rules, rule] }))
+    get().saveRules()
+  },
+
+  deleteRule: (id) => {
+    set((state) => ({ rules: state.rules.filter((r) => r.id !== id) }))
+    get().saveRules()
+  },
+
+  loadRules: async () => {
+    if (window.electronAPI) {
+      const rules = await window.electronAPI.loadRules()
+      set({ rules: rules as Rule[] })
+    }
+  },
+
+  saveRules: async () => {
+    if (window.electronAPI) {
+      await window.electronAPI.saveRules(get().rules)
+    }
+  },
+
+  addMessage: (message) => set((state) => ({
+    messages: [...state.messages, {
+      ...message,
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      timestamp: Date.now()
+    }]
+  })),
+
+  updateLastMessage: (content) => {
+    set((state) => {
+      const messages = [...state.messages]
+      if (messages.length > 0) {
+        messages[messages.length - 1] = {
+          ...messages[messages.length - 1],
+          content
+        }
+      }
+      return { messages }
+    })
+    // 自动保存当前会话
+    get().autoSaveCurrentSession()
+  },
+
+  updateLastMessageWithToolCalls: (content, toolCalls) => {
+    set((state) => {
+      const messages = [...state.messages]
+      if (messages.length > 0) {
+        messages[messages.length - 1] = {
+          ...messages[messages.length - 1],
+          content,
+          toolCalls
+        }
+      }
+      return { messages }
+    })
+    // 自动保存当前会话
+    get().autoSaveCurrentSession()
+  },
+
+  clearMessages: () => {
+    const { messages, currentSessionId, chatSessions } = get()
+    // 保存当前会话到历史
+    if (messages.length > 0) {
+      const title = messages.find(m => m.role === 'user')?.content.slice(0, 20) || '新对话'
+      const now = Date.now()
+      const newSession: ChatSession = {
+        id: currentSessionId || `session-${now}`,
+        title,
+        messages: [...messages],
+        createdAt: now,
+        updatedAt: now
+      }
+      // 更新或添加会话
+      const existingIndex = chatSessions.findIndex(s => s.id === currentSessionId)
+      if (existingIndex >= 0) {
+        const updated = [...chatSessions]
+        updated[existingIndex] = newSession
+        set({ chatSessions: updated, messages: [], currentSessionId: null })
+      } else {
+        set({ chatSessions: [newSession, ...chatSessions].slice(0, 20), messages: [], currentSessionId: null })
+      }
+      get().saveChatSessions()
+    } else {
+      set({ messages: [], currentSessionId: null })
+    }
+    // 清除临时保存的当前会话
+    try {
+      localStorage.removeItem('cfspider-current-session')
+    } catch {}
+  },
+  
+  setAILoading: (isAILoading) => set({ isAILoading }),
+  
+  stopAI: () => set({ aiStopRequested: true, isAILoading: false }),
+  
+  resetAIStop: () => set({ aiStopRequested: false }),
+  
+  // 聊天会话管理
+  newChatSession: () => {
+    const { messages, currentSessionId, chatSessions } = get()
+    // 保存当前会话
+    if (messages.length > 0) {
+      const title = messages.find(m => m.role === 'user')?.content.slice(0, 20) || '新对话'
+      const now = Date.now()
+      const newSession: ChatSession = {
+        id: currentSessionId || `session-${now}`,
+        title,
+        messages: [...messages],
+        createdAt: now,
+        updatedAt: now
+      }
+      const existingIndex = chatSessions.findIndex(s => s.id === currentSessionId)
+      if (existingIndex >= 0) {
+        const updated = [...chatSessions]
+        updated[existingIndex] = newSession
+        set({ chatSessions: updated, messages: [], currentSessionId: null })
+      } else {
+        set({ chatSessions: [newSession, ...chatSessions].slice(0, 20), messages: [], currentSessionId: null })
+      }
+      get().saveChatSessions()
+    } else {
+      set({ messages: [], currentSessionId: null })
+    }
+    // 清除临时保存
+    try {
+      localStorage.removeItem('cfspider-current-session')
+    } catch {}
+  },
+  
+  switchChatSession: (id) => {
+    const { messages, currentSessionId, chatSessions } = get()
+    // 先保存当前会话
+    if (messages.length > 0 && currentSessionId) {
+      const existingIndex = chatSessions.findIndex(s => s.id === currentSessionId)
+      if (existingIndex >= 0) {
+        const updated = [...chatSessions]
+        updated[existingIndex] = {
+          ...updated[existingIndex],
+          messages: [...messages],
+          updatedAt: Date.now()
+        }
+        set({ chatSessions: updated })
+        get().saveChatSessions()
+      }
+    }
+    // 切换到目标会话
+    const session = get().chatSessions.find(s => s.id === id)
+    if (session) {
+      set({ messages: [...session.messages], currentSessionId: id })
+      // 保存当前会话状态
+      get().autoSaveCurrentSession()
+    }
+  },
+  
+  deleteChatSession: (id) => {
+    set((state) => ({
+      chatSessions: state.chatSessions.filter(s => s.id !== id)
+    }))
+    get().saveChatSessions()
+  },
+  
+  saveChatSessions: async () => {
+    try {
+      localStorage.setItem('cfspider-chat-sessions', JSON.stringify(get().chatSessions))
+    } catch {}
+  },
+  
+  loadChatSessions: async () => {
+    try {
+      const data = localStorage.getItem('cfspider-chat-sessions')
+      if (data) {
+        const sessions = JSON.parse(data) as ChatSession[]
+        set({ chatSessions: sessions })
+      }
+      // 加载当前未保存的会话
+      const currentData = localStorage.getItem('cfspider-current-session')
+      if (currentData) {
+        const current = JSON.parse(currentData)
+        if (current.messages && current.messages.length > 0) {
+          set({ messages: current.messages, currentSessionId: current.id })
+        }
+      }
+    } catch {}
+  },
+  
+  // 自动保存当前会话（每次消息更新时调用）
+  autoSaveCurrentSession: () => {
+    const { messages, currentSessionId } = get()
+    if (messages.length === 0) return
+    
+    try {
+      const sessionId = currentSessionId || `session-${Date.now()}`
+      if (!currentSessionId) {
+        set({ currentSessionId: sessionId })
+      }
+      localStorage.setItem('cfspider-current-session', JSON.stringify({
+        id: sessionId,
+        messages: messages
+      }))
+    } catch {}
+  },
+
+  setAIConfig: (config) => set((state) => ({
+    aiConfig: { ...state.aiConfig, ...config }
+  })),
+
+  loadConfig: async () => {
+    if (window.electronAPI) {
+      const config = await window.electronAPI.loadConfig()
+      set({ aiConfig: config })
+    }
+  },
+
+  saveConfig: async () => {
+    if (window.electronAPI) {
+      await window.electronAPI.saveConfig(get().aiConfig)
+    }
+  },
+
+  // 已保存的配置
+  addSavedConfig: (name) => {
+    const { aiConfig, savedConfigs } = get()
+    const newConfig: SavedAIConfig = {
+      ...aiConfig,
+      id: Date.now().toString(),
+      name,
+      createdAt: Date.now()
+    }
+    set({ savedConfigs: [...savedConfigs, newConfig] })
+    get().saveSavedConfigs()
+  },
+
+  deleteSavedConfig: (id) => {
+    set((state) => ({
+      savedConfigs: state.savedConfigs.filter((c) => c.id !== id)
+    }))
+    get().saveSavedConfigs()
+  },
+
+  applySavedConfig: (id) => {
+    const config = get().savedConfigs.find((c) => c.id === id)
+    if (config) {
+      set({
+        aiConfig: {
+          endpoint: config.endpoint,
+          apiKey: config.apiKey,
+          model: config.model
+        }
+      })
+      get().saveConfig()
+    }
+  },
+
+  loadSavedConfigs: async () => {
+    if (window.electronAPI) {
+      try {
+        const configs = await window.electronAPI.loadSavedConfigs()
+        set({ savedConfigs: configs as SavedAIConfig[] })
+      } catch {
+        set({ savedConfigs: [] })
+      }
+    }
+  },
+
+  saveSavedConfigs: async () => {
+    if (window.electronAPI) {
+      await window.electronAPI.saveSavedConfigs(get().savedConfigs)
+    }
+  },
+
+  // 鼠标控制
+  showMouse: () => set((state) => ({
+    mouseState: { ...state.mouseState, visible: true }
+  })),
+  
+  hideMouse: () => set((state) => ({
+    mouseState: { ...state.mouseState, visible: false }
+  })),
+  
+  moveMouse: (x, y, duration = 300) => set((state) => ({
+    mouseState: { ...state.mouseState, x, y, duration, visible: true }
+  })),
+  
+  clickMouse: () => set((state) => ({
+    mouseState: { 
+      ...state.mouseState, 
+      clicking: true, 
+      clickId: state.mouseState.clickId + 1 
+    }
+  })),
+
+  // 浏览器设置
+  setBrowserSettings: (settings, navigateToHomepage = true) => {
+    set((state) => ({
+      browserSettings: { ...state.browserSettings, ...settings }
+    }))
+    get().saveBrowserSettings()
+    
+    // 如果设置了搜索引擎，自动跳转到该搜索引擎首页
+    if (settings.searchEngine && navigateToHomepage) {
+      const homepage = SEARCH_ENGINE_HOMEPAGES[settings.searchEngine]
+      if (homepage) {
+        set({ url: homepage })
+        // 更新 webview
+        const webview = document.querySelector('webview') as HTMLElement & { src?: string }
+        if (webview) {
+          webview.src = homepage
+        }
+      }
+    }
+  },
+
+  loadBrowserSettings: async () => {
+    if (window.electronAPI?.loadBrowserSettings) {
+      try {
+        const settings = await window.electronAPI.loadBrowserSettings()
+        console.log('[CFSpider] 加载浏览器设置:', settings)
+        if (settings && typeof settings === 'object') {
+          const browserSettings = settings as BrowserSettings
+          // 根据搜索引擎设置首页 URL
+          const homepage = SEARCH_ENGINE_HOMEPAGES[browserSettings.searchEngine] || 'https://www.bing.com'
+          
+          // 同时更新第一个标签页的 URL
+          const { tabs } = get()
+          const updatedTabs = tabs.length > 0 
+            ? [{ ...tabs[0], url: homepage }, ...tabs.slice(1)]
+            : [{ id: 'tab-1', url: homepage, title: '新标签页', isLoading: false }]
+          
+          set({ 
+            browserSettings,
+            url: homepage,
+            tabs: updatedTabs
+          })
+          console.log('[CFSpider] 设置首页 URL:', homepage)
+        }
+      } catch (e) {
+        console.error('[CFSpider] 加载浏览器设置失败:', e)
+      }
+    }
+  },
+
+  saveBrowserSettings: async () => {
+    if (window.electronAPI?.saveBrowserSettings) {
+      const settings = get().browserSettings
+      console.log('[CFSpider] 保存浏览器设置:', settings)
+      await window.electronAPI.saveBrowserSettings(settings)
+    }
+  },
+
+  // 下载管理
+  setDownloadedImages: (images) => set({ downloadedImages: images }),
+  clearDownloadedImages: () => set({ downloadedImages: [] }),
+  
+  // 元素选择请求
+  setElementSelectionRequest: (request) => set({ elementSelectionRequest: request }),
+  respondToElementSelection: (mode, selector) => {
+    const request = get().elementSelectionRequest
+    if (request) {
+      set({
+        elementSelectionRequest: {
+          ...request,
+          status: mode === 'manual' ? 'manual' : (selector ? 'completed' : 'auto'),
+          selector: selector
+        }
+      })
+    }
+  }
+}))

@@ -66,3 +66,26 @@ cfspider教程.mp4
 
 # Remotion 视频项目
 cfspider-video/
+
+# ========================================
+# 住宅代理配置文档（含敏感信息）
+# ========================================
+docs/xray-residential-proxy.md
+
+# ========================================
+# Tauri 版本（开发中，暂不提交）
+# ========================================
+cfspider-tauri/
+
+# ========================================
+# cfspider-browser Electron 项目
+# ========================================
+cfspider-browser/node_modules/
+cfspider-browser/dist/
+cfspider-browser/dist-electron/
+cfspider-browser/release/
+cfspider-browser/.vscode/
+cfspider-browser/*.log
+
+# Cursor 工作区
+.cursor/

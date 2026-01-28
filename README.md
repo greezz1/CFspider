@@ -1,4 +1,4 @@
-﻿# CFspider - Cloudflare Workers Spider
+# CFspider - Cloudflare Workers Spider
 
 [![PyPI version](https://img.shields.io/pypi/v/cfspider)](https://pypi.org/project/cfspider/)
 [![Python](https://img.shields.io/pypi/pyversions/cfspider)](https://pypi.org/project/cfspider/)
@@ -2562,6 +2562,43 @@ CFspider 是一个**技术研究项目**，旨在探索 Cloudflare Workers 边�
 Apache License 2.0
 
 本项目采用 Apache 2.0 许可证。Apache 2.0 许可证已包含免责条款（第7、8条），请仔细阅读 [LICENSE](LICENSE) 文件。
+
+## CFspider 智能浏览器
+
+CFspider 项目现已包含一个 AI 驱动的智能浏览器应用（cfspider-browser），支持通过自然语言对话控制浏览器。
+
+### 核心功能
+
+- **AI 智能助手**：通过自然语言对话控制浏览器，支持多种 AI 模型
+- **真人模拟操作**：AI 像真人一样点击、输入、滚动，完整展示操作过程
+- **虚拟鼠标**：可视化鼠标移动和点击动画
+- **多标签页浏览**：支持新建、关闭、切换标签页
+
+### AI 服务商支持
+
+| 服务商 | 说明 |
+|--------|------|
+| **Ollama** | 本地运行，无需 API Key（推荐） |
+| OpenAI | GPT-4o, GPT-4, GPT-3.5 |
+| DeepSeek | deepseek-chat, deepseek-reasoner |
+| Groq | 超快推理速度 |
+| Moonshot | Kimi 大模型 |
+| 智谱 AI | GLM-4 系列 |
+| 通义千问 | Qwen 系列 |
+| SiliconFlow | 国产模型聚合平台 |
+| 自定义 | 任意 OpenAI 兼容 API |
+
+**支持自定义模型名称**：可直接输入任意模型名称，不限于预设列表。
+
+### 快速开始
+
+```bash
+cd cfspider-browser
+npm install
+npm run electron:dev
+```
+
+详细文档请查看 [cfspider-browser/README.md](cfspider-browser/README.md)
 
 ## 链接
 

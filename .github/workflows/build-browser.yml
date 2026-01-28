@@ -1,0 +1,145 @@
+name: Build CFspider Smart Browser
+
+on:
+  push:
+    tags:
+      - 'browser-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., 1.0.0)'
+        required: false
+        default: ''
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: cfspider-browser/package-lock.json
+
+      - name: Install dependencies
+        working-directory: cfspider-browser
+        run: npm ci
+
+      - name: Build Electron app
+        working-directory: cfspider-browser
+        run: npm run electron:build-win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cfspider-browser-windows
+          path: cfspider-browser/release/*.exe
+          retention-days: 30
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: cfspider-browser/package-lock.json
+
+      - name: Install dependencies
+        working-directory: cfspider-browser
+        run: npm ci
+
+      - name: Build Electron app
+        working-directory: cfspider-browser
+        run: npm run electron:build-mac
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cfspider-browser-macos
+          path: |
+            cfspider-browser/release/*.dmg
+            cfspider-browser/release/*.zip
+          retention-days: 30
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: cfspider-browser/package-lock.json
+
+      - name: Install dependencies
+        working-directory: cfspider-browser
+        run: npm ci
+
+      - name: Build Electron app
+        working-directory: cfspider-browser
+        run: npm run electron:build-linux
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cfspider-browser-linux
+          path: |
+            cfspider-browser/release/*.AppImage
+            cfspider-browser/release/*.deb
+          retention-days: 30
+
+  release:
+    needs: [build-windows, build-macos, build-linux]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: CFspider Smart Browser ${{ github.ref_name }}
+          body: |
+            ## CFspider 智能浏览器 ${{ github.ref_name }}
+            
+            AI 驱动的智能浏览器，通过自然语言对话控制浏览器自动化。
+            
+            ### 下载
+            - **Windows**: cfspider-browser-Setup-*.exe
+            - **macOS**: cfspider-browser-*.dmg
+            - **Linux**: cfspider-browser-*.AppImage
+            
+            ### 功能特性
+            - 自然语言控制浏览器
+            - 支持 Ollama、OpenAI、DeepSeek 等多种 AI 模型
+            - 真人模拟操作，可视化虚拟鼠标
+            - 网站安全检测
+          files: |
+            artifacts/**/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
